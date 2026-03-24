@@ -21,7 +21,7 @@ First public release of the Quanton Operator. This release provides a Kubernetes
 
 The table below maps Quanton image tags to the underlying open-source component versions they are built on.
 
-| Component        | `release-v0.205.0-al2023` |
+| Component        | `release-v0.206.0-al2023` |
 | ---------------- | ------------------------- |
 | [Spark](https://spark.apache.org/) [^1] | 3.5.2                     |
 | Python           | 3.9, 3.11 (default), or 3.12 |
