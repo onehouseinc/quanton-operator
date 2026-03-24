@@ -1,0 +1,5 @@
+# Monitoring Watcher is not deployed
+# Metrics collection is now exclusively handled by OTEL Collector which scrapes
+# Prometheus metrics from the operator and Spark Operator, then sends them to the
+# control plane for monitoring, billing, and telemetry purposes.
+# This eliminates the need for a separate monitoring-watcher deployment.

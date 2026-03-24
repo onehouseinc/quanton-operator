@@ -1,0 +1,31 @@
+apiVersion: onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: spark-pi-java-example
+  namespace: default
+spec:
+  sparkApplicationSpec: # Put your SparkApplication CRD's spec section under here.
+    type: Java
+    mode: cluster
+    image: "apache/spark:3.5.0" 
+    imagePullPolicy: IfNotPresent
+    mainClass: org.apache.spark.examples.JavaSparkPi
+    mainApplicationFile: "local:///opt/spark/examples/jars/calculate-pi-example_2.12-3.5.0.jar" # TBD
+    arguments:
+      - "100"
+    sparkVersion: "3.5.0"
+    restartPolicy:
+      type: Never
+    driver:
+      cores: 1
+      coreLimit: "1200m"
+      memory: "1024m"
+      labels:
+        version: "3.5.0"
+      serviceAccount: spark-operator-spark
+    executor:
+      cores: 1
+      instances: 2
+      memory: "512m"
+      labels:
+        version: "3.5.0"

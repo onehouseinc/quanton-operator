@@ -1,0 +1,67 @@
+# Default values for onehouse-quanton-operator
+
+# This configuration will be provided by Onehouse.
+onehouseConfig:
+  projectId: ""  # Project ID
+  linkId: ""     # Request/link ID for the cluster
+
+  # Control plane communication
+  endpoint: "gwc.onehouse.ai:443"
+  # Metrics remote write endpoint (host:port) for forwarding operator metrics
+  metricsEndpoint: "metrics.onehouse.ai:443"
+  mtls:
+    clientCert: ""  # Client certificate (PEM format, will be base64-encoded in K8s secret)
+    clientKey: ""   # Client private key (PEM format, will be base64-encoded in K8s secret)
+
+  imagePullSecrets:
+    accessToken: ""
+
+  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.205.0-al2023"
+  authToken: ""
+
+# Quanton Operator configuration
+quantonOperator:
+  # Namespaces where Spark jobs will run
+  # Empty list = all-namespaces mode (operator watches all namespaces and auto-creates secrets)
+  # Specific list = namespace-restricted mode (operator only processes jobs in listed namespaces)
+  #
+  # When using a specific list:
+  # - These namespaces must be pre-created before installing this chart.
+  # - The chart will NOT create these namespaces automatically.
+  # - Create them with: kubectl create namespace <namespace-name>
+  # - Do NOT use namespace names that conflict with other Helm releases.
+  jobNamespaces:
+    - default
+
+  # Additional annotations for pods created by this chart
+  annotations: {}
+    # team: "data-engineering"
+
+  # Node selector for pods created by this chart
+  nodeSelector: {}
+    # node-type: "compute"
+
+  image: "dist.onehouse.ai/onehouseai/quanton-controller:1.0.0"
+  pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  serviceAccount:
+    name: quanton-operator
+
+  # Additional Spark conf parameter names to mask before uploading to control plane.
+  # Keys matching the built-in patterns (secret, password, token, access.key) are always masked.
+  # Use this list to mask additional custom parameters by exact key name.
+  # Example:
+  #   additionalSparkParamsToMask:
+  #     - "spark.hadoop.fs.s3a.session.token"
+  #     - "spark.my.custom.credential"
+  additionalSparkParamsToMask: []
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi

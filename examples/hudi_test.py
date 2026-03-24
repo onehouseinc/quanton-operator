@@ -1,0 +1,172 @@
+"""
+hudi_test.py — PySpark Hudi smoke test
+
+Generates a 10-row customer dataset, writes it to a Hudi COW table,
+reads it back, and asserts the row count. Exits with code 1 on failure.
+
+Usage:
+  spark-submit --class ... hudi_test.py <outputDir>
+
+  # With S3 output:
+  spark-submit hudi_test.py s3a://my-bucket/output/pyspark-hudi-test
+"""
+
+import sys
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    StructType, StructField, StringType, IntegerType,
+    DoubleType, BooleanType, LongType
+)
+
+# ---------------------------------------------------------------------------
+# Args
+# ---------------------------------------------------------------------------
+if len(sys.argv) != 2:
+    print("Usage: hudi_test.py <outputDir>")
+    sys.exit(1)
+
+output_dir = sys.argv[1].rstrip("/")
+table_path = f"{output_dir}/pyspark_hudi_customers"
+
+# ---------------------------------------------------------------------------
+# SparkSession
+# ---------------------------------------------------------------------------
+spark = (
+    SparkSession.builder
+    .appName("PySparkHudiTest")
+    .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+    .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+    .getOrCreate()
+)
+
+spark.sparkContext.setLogLevel("WARN")
+
+# ---------------------------------------------------------------------------
+# Sample data
+# ---------------------------------------------------------------------------
+schema = StructType([
+    StructField("customer_id",  StringType(),  False),
+    StructField("name",         StringType(),  True),
+    StructField("email",        StringType(),  True),
+    StructField("country",      StringType(),  True),
+    StructField("age",          IntegerType(), True),
+    StructField("spend_amount", DoubleType(),  True),
+    StructField("signup_date",  StringType(),  True),
+    StructField("is_active",    BooleanType(), True),
+    StructField("updated_at",   LongType(),    False),
+])
+
+rows = [
+    ("C001", "Alice Johnson",  "alice.johnson@example.com",  "US", 34, 1250.75, "2022-01-15", True,  1704067200000),
+    ("C002", "Bob Smith",      "bob.smith@example.com",      "UK", 28,  890.50, "2022-03-22", True,  1704153600000),
+    ("C003", "Carol Williams", "carol.williams@example.com", "CA", 45, 2340.00, "2021-11-10", False, 1704240000000),
+    ("C004", "David Brown",    "david.brown@example.com",    "AU", 52, 3100.25, "2020-07-04", True,  1704326400000),
+    ("C005", "Eva Martinez",   "eva.martinez@example.com",   "US", 31,  675.00, "2023-02-28", True,  1704412800000),
+    ("C006", "Frank Garcia",   "frank.garcia@example.com",   "MX", 39, 1820.50, "2022-08-15", True,  1704499200000),
+    ("C007", "Grace Lee",      "grace.lee@example.com",      "SG", 27,  560.25, "2023-05-10", False, 1704585600000),
+    ("C008", "Henry Wilson",   "henry.wilson@example.com",   "UK", 48, 4200.00, "2020-12-01", True,  1704672000000),
+    ("C009", "Irene Davis",    "irene.davis@example.com",    "CA", 33,  980.75, "2022-09-20", True,  1704758400000),
+    ("C010", "James Anderson", "james.anderson@example.com", "AU", 41, 1560.00, "2021-04-18", True,  1704844800000),
+]
+
+df = spark.createDataFrame(rows, schema)
+
+# ---------------------------------------------------------------------------
+# Write to Hudi
+# ---------------------------------------------------------------------------
+print(f"[hudi_test] Writing {df.count()} rows to Hudi table at {table_path}")
+
+(
+    df.write
+    .format("hudi")
+    .mode("overwrite")
+    .option("hoodie.table.name",                              "pyspark_customers")
+    .option("hoodie.datasource.write.recordkey.field",        "customer_id")
+    .option("hoodie.datasource.write.partitionpath.field",    "country")
+    .option("hoodie.datasource.write.precombine.field",       "updated_at")
+    .option("hoodie.datasource.write.operation",              "bulk_insert")
+    .option("hoodie.datasource.write.hive_style_partitioning","true")
+    .option("hoodie.datasource.hive_sync.enable",             "false")
+    .save(table_path)
+)
+
+# ---------------------------------------------------------------------------
+# Read back and verify
+# ---------------------------------------------------------------------------
+read_count = spark.read.format("hudi").load(table_path).count()
+assert read_count == 10, f"Expected 10 rows but got {read_count}"
+
+print(f"[hudi_test] PASS — read back {read_count} rows from {table_path}")
+
+# ---------------------------------------------------------------------------
+# Basic operations
+# ---------------------------------------------------------------------------
+
+# Filter
+active_count = (
+    spark.read.format("hudi").load(table_path)
+    .filter("is_active = true")
+    .count()
+)
+assert active_count == 8, f"Expected 8 active customers but got {active_count}"
+print(f"[hudi_test] PASS — filter: {active_count} active customers")
+
+# Aggregation
+avg_spend = (
+    spark.read.format("hudi").load(table_path)
+    .agg({"spend_amount": "avg"})
+    .collect()[0][0]
+)
+assert avg_spend > 0, "Expected positive average spend"
+print(f"[hudi_test] PASS — avg spend_amount = {avg_spend:.2f}")
+
+# Partition pruning (country = US)
+us_count = (
+    spark.read.format("hudi").load(table_path)
+    .filter("country = 'US'")
+    .count()
+)
+assert us_count == 2, f"Expected 2 US customers but got {us_count}"
+print(f"[hudi_test] PASS — partition filter: {us_count} US customers")
+
+# Upsert — update Alice's spend_amount
+print("[hudi_test] Running upsert (update Alice's spend_amount to 9999.99)")
+upsert_rows = [
+    ("C001", "Alice Johnson", "alice.johnson@example.com", "US", 34, 9999.99, "2022-01-15", True, 1704067200001),
+]
+upsert_df = spark.createDataFrame(upsert_rows, schema)
+(
+    upsert_df.write
+    .format("hudi")
+    .mode("append")
+    .option("hoodie.table.name",                              "pyspark_customers")
+    .option("hoodie.datasource.write.recordkey.field",        "customer_id")
+    .option("hoodie.datasource.write.partitionpath.field",    "country")
+    .option("hoodie.datasource.write.precombine.field",       "updated_at")
+    .option("hoodie.datasource.write.operation",              "upsert")
+    .option("hoodie.datasource.write.hive_style_partitioning","true")
+    .option("hoodie.datasource.hive_sync.enable",             "false")
+    .save(table_path)
+)
+
+after_upsert = spark.read.format("hudi").load(table_path)
+upsert_count = after_upsert.count()
+assert upsert_count == 10, f"Expected 10 rows after upsert but got {upsert_count}"
+
+alice_spend = (
+    after_upsert
+    .filter("customer_id = 'C001'")
+    .select("spend_amount")
+    .collect()[0][0]
+)
+assert alice_spend == 9999.99, f"Expected 9999.99 after upsert but got {alice_spend}"
+print(f"[hudi_test] PASS — upsert: row count still {upsert_count}, Alice spend_amount = {alice_spend}")
+
+print()
+print("=" * 50)
+print("  All PySpark Hudi tests PASSED")
+print("=" * 50)
+
+spark.stop()

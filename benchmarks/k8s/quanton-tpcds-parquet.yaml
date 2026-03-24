@@ -1,0 +1,66 @@
+apiVersion: quantonsparkoperator.onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: quanton-tpcds-parquet
+  namespace: default
+spec:
+  sparkApplicationSpec:
+    type: Python
+    mode: cluster
+    image: "apache/spark:3.5.0"
+    imagePullPolicy: IfNotPresent
+    mainApplicationFile: "local:///mnt/scripts/run_queries.py"
+    arguments:
+      - "--sql-dir"
+      - "/mnt/sql/tpcds"
+      - "--parquet-dir"
+      - "/data/tpcds/parquet"
+      - "--output-file"
+      - "/data/tpcds/results/quanton-parquet.json"
+    sparkVersion: "3.5.0"
+    restartPolicy:
+      type: Never
+    volumes:
+      - name: tpcds-data
+        persistentVolumeClaim:
+          claimName: tpcds-data
+      - name: scripts
+        configMap:
+          name: tpcds-scripts
+      - name: sql-tpcds
+        configMap:
+          name: tpcds-sql-queries
+      - name: sql-ddl
+        configMap:
+          name: tpcds-sql-ddl
+    driver:
+      cores: 2
+      coreLimit: "2000m"
+      memory: "6144m"
+      labels:
+        version: "3.5.0"
+      serviceAccount: spark-operator-spark
+      volumeMounts:
+        - name: tpcds-data
+          mountPath: /data/tpcds
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: sql-tpcds
+          mountPath: /mnt/sql/tpcds
+        - name: sql-ddl
+          mountPath: /mnt/sql/ddl
+    executor:
+      cores: 1
+      instances: 2
+      memory: "3072m"
+      labels:
+        version: "3.5.0"
+      volumeMounts:
+        - name: tpcds-data
+          mountPath: /data/tpcds
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: sql-tpcds
+          mountPath: /mnt/sql/tpcds
+        - name: sql-ddl
+          mountPath: /mnt/sql/ddl

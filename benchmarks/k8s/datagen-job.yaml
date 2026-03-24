@@ -1,0 +1,49 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: tpcds-datagen
+  namespace: default
+spec:
+  type: Python
+  mode: cluster
+  image: "tpcds-datagen:latest"
+  imagePullPolicy: Never
+  mainApplicationFile: "local:///mnt/scripts/datagen.py"
+  arguments:
+    - "--scale-factor"
+    - "1"
+    - "--data-dir"
+    - "/data/tpcds"
+  sparkVersion: "3.5.0"
+  restartPolicy:
+    type: Never
+  volumes:
+    - name: tpcds-data
+      persistentVolumeClaim:
+        claimName: tpcds-data
+    - name: scripts
+      configMap:
+        name: tpcds-scripts
+  driver:
+    cores: 2
+    coreLimit: "2000m"
+    memory: "4096m"
+    labels:
+      version: "3.5.0"
+    serviceAccount: spark-operator-spark
+    volumeMounts:
+      - name: tpcds-data
+        mountPath: /data/tpcds
+      - name: scripts
+        mountPath: /mnt/scripts
+  executor:
+    cores: 1
+    instances: 2
+    memory: "2048m"
+    labels:
+      version: "3.5.0"
+    volumeMounts:
+      - name: tpcds-data
+        mountPath: /data/tpcds
+      - name: scripts
+        mountPath: /mnt/scripts

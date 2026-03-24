@@ -1,0 +1,7 @@
+# Ignore benchmark run output
+*.log
+*.json
+
+# Keep this directory
+!.gitkeep
+!.gitignore
