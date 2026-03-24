@@ -15,7 +15,7 @@ The operator provides a seamless migration path — submit your existing Spark j
 
 ## Quick Start
 
-1. Obtain your `onehouse-values.yaml` from the [Onehouse console](https://www.onehouse.ai).
+1. Obtain your `onehouse-values.yaml` from the [Onehouse console](https://www.cloud.onehouse.ai).
 
 2. Install the operator:
 
@@ -125,7 +125,7 @@ Then use either skill:
 | `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively. |
 | `/run-tpcds-benchmark` | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. |
 
-Both skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://www.onehouse.ai)) to install the Quanton Operator.
+Both skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://www.cloud.onehouse.ai)) to install the Quanton Operator.
 
 
 ## Benchmarks
