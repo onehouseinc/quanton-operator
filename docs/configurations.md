@@ -23,7 +23,7 @@ These values are typically pre-populated in the `onehouse-values.yaml` provided 
 | `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
 | `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
 | `onehouseConfig.imagePullSecrets.accessToken` | Docker registry access token for pulling Onehouse images | `""` |
-| `onehouseConfig.quantonSparkImage` | Quanton Spark runtime image | `dist.onehouse.ai/onehouseai/quanton-spark:release-v0.205.0-al2023` |
+| `onehouseConfig.quantonSparkImage` | Quanton Spark runtime image | `dist.onehouse.ai/onehouseai/quanton-spark:release-v0.206.0-al2023` |
 | `onehouseConfig.authToken` | JWT token for control plane authentication | `""` |
 
 
@@ -135,7 +135,7 @@ onehouseConfig:
       -----END PRIVATE KEY-----
   imagePullSecrets:
     accessToken: "your-docker-access-token"
-  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.205.0-al2023"
+  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.206.0-al2023"
   authToken: "your-jwt-token"
 
 quantonOperator:
