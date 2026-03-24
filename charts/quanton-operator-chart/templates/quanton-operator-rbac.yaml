@@ -1,0 +1,213 @@
+---
+# ServiceAccount for Quanton Operator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+
+---
+# ClusterRole for Quanton Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+rules:
+# QuantonSparkApplication CRD permissions (v1beta2)
+- apiGroups:
+  - quantonsparkoperator.onehouse.ai
+  resources:
+  - quantonsparkapplications
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - quantonsparkoperator.onehouse.ai
+  resources:
+  - quantonsparkapplications/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - quantonsparkoperator.onehouse.ai
+  resources:
+  - quantonsparkapplications/status
+  verbs:
+  - get
+  - patch
+  - update
+
+# SparkApplication CRD permissions (for creating/managing Spark jobs)
+# The Spark Operator uses the sparkoperator.k8s.io API group
+- apiGroups:
+  - sparkoperator.k8s.io
+  resources:
+  - sparkapplications
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Core Kubernetes permissions
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Scoped secret management - restricted to operator-managed secrets only
+# Operator needs to read/update these secrets for JWT token refresh and image pull credentials
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - onehouse-token
+  - onehouse-docker-registry-secret
+  - mutual-tls-secret
+  verbs:
+  - get
+  - update
+  - patch
+# create, list, watch cannot be scoped by resourceNames
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - list
+  - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+
+# Metrics permissions
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+
+# Leader election permissions (for --leader-elect flag)
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Deployment permissions for Informer cache sync (cluster-wide)
+# Controller-runtime Informer needs list/watch at cluster scope to manage the client cache
+# RestartDPProxyPod uses client.Get which relies on the Informer cache being synced
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+# ClusterRoleBinding for Quanton Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  namespace: {{ .Release.Namespace }}
+
+---
+# Role for namespace-scoped deployment access
+# Scoped to only the quanton-operator namespace for pod restart on certificate refresh
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-deployment-restart
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+rules:
+# Deployment permissions for pod restart on certificate refresh (namespace-scoped)
+# RestartDPProxyPod updates deployment with restart annotation when mTLS cert is refreshed
+# Restricted to quanton-operator namespace only
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+---
+# RoleBinding for namespace-scoped deployment access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-deployment-restart
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-deployment-restart
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  namespace: {{ .Release.Namespace }}

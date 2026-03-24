@@ -1,0 +1,247 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quanton-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+spec:
+  replicas: {{ .Values.quantonOperator.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: onehouse-quanton-operator
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        {{- with .Values.quantonOperator.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/name: onehouse-quanton-operator
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    spec:
+      serviceAccountName: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+
+      {{- if .Values.onehouseConfig.imagePullSecrets.accessToken }}
+      imagePullSecrets:
+        - name: onehouse-docker-registry-secret
+      {{- end }}
+
+      # Security context to allow OTEL collector (UID 10001) to write to metrics-storage volume
+      securityContext:
+        fsGroup: 10001  # OTEL collector runs as this UID in the container image
+
+      # Priority class for critical infrastructure
+      priorityClassName: system-cluster-critical
+
+      # Init container to create metrics storage directory
+      initContainers:
+      - name: init-metrics-storage
+        image: busybox:1.36
+        command: ['sh', '-c', 'mkdir -p /var/log/otel-metrics']
+        volumeMounts:
+        - name: metrics-storage
+          mountPath: /var/log/otel-metrics
+
+      containers:
+      # Main Quanton Operator container
+      - name: operator
+        image: {{ .Values.quantonOperator.image }}
+        imagePullPolicy: {{ .Values.quantonOperator.pullPolicy }}
+
+        command:
+          - /manager
+        args:
+          - --leader-elect
+          - --metrics-bind-address=0.0.0.0:8080
+          - --metrics-secure=false
+          - --health-probe-bind-address=:8081
+
+        env:
+        # Namespace for watching resources
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+
+        # Operator namespace (used for JWT token manager initialization)
+        # This is where the operator's JWT token secret is stored
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+
+        # Pod name for identification
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        # Pod IP for identification
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        # JWT Token for Control Plane auth (if configured)
+        {{- if .Values.onehouseConfig.authToken }}
+        - name: ONEHOUSE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: onehouse-token
+              key: JWT_TOKEN
+        {{- end }}
+
+        # Path to operator config file (mounted from ConfigMap)
+        - name: OPERATOR_CONFIG_PATH
+          value: "/etc/quanton-operator/config.json"
+
+        ports:
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        - name: grpc
+          containerPort: 4320
+          protocol: TCP
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 20
+
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+        resources: {{ toYaml .Values.quantonOperator.resources | nindent 10 }}
+
+        volumeMounts:
+        - name: otel-config
+          mountPath: /etc/otel
+        - name: operator-config
+          mountPath: /etc/quanton-operator
+          readOnly: true
+
+      # OTel Collector sidecar (for metrics/telemetry export)
+      # Always enabled - degrades gracefully if export endpoint unreachable
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.146.0
+        imagePullPolicy: IfNotPresent
+
+        args:
+          - --config=/etc/otel/config.yaml
+
+        env:
+        - name: GOGC
+          value: "80"
+
+        ports:
+        - name: otlp-grpc
+          containerPort: 4317
+          protocol: TCP
+        - name: otlp-http
+          containerPort: 4318
+          protocol: TCP
+        - name: health-check
+          containerPort: 13133
+          protocol: TCP
+
+        # Note: Health probes disabled for OTel collector due to debug exporter configuration
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: health-check
+        #   initialDelaySeconds: 5
+        #   periodSeconds: 10
+
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+
+        volumeMounts:
+        - name: otel-config
+          mountPath: /etc/otel
+          readOnly: true
+        - name: metrics-storage
+          mountPath: /var/log/otel-metrics
+        - name: billing-queue-storage
+          mountPath: /var/log/otel-billing-queue
+
+      # kube-state-metrics sidecar: exposes kube_pod_labels Prometheus metric with all pod labels.
+      # Scoped to job namespaces only. OTEL prometheus/billing receiver scrapes localhost:8082.
+      - name: kube-state-metrics
+        image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.14.0
+        imagePullPolicy: IfNotPresent
+        args:
+          - --port=8082
+          - --telemetry-port=8083
+          - --resources=pods
+          {{- if .Values.quantonOperator.jobNamespaces }}
+          - --namespaces={{ .Values.quantonOperator.jobNamespaces | join "," }}
+          {{- end }}
+          - --metric-allowlist=kube_pod_labels,kube_pod_container_resource_requests,kube_pod_container_resource_limits,kube_pod_status_phase
+          - --metric-labels-allowlist=pods=[*]
+        ports:
+        - name: ksm
+          containerPort: 8082
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+            ephemeral-storage: 50Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+            ephemeral-storage: 100Mi
+
+      volumes:
+      - name: operator-config
+        configMap:
+          name: quanton-operator-config
+          defaultMode: 0644
+      - name: otel-config
+        configMap:
+          name: otel-collector-config
+          defaultMode: 0644
+      - name: metrics-storage
+        emptyDir: {}
+      - name: billing-queue-storage
+        emptyDir: {}
+
+      {{- with .Values.quantonOperator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - onehouse-quanton-operator
+              topologyKey: kubernetes.io/hostname

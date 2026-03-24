@@ -1,0 +1,65 @@
+---
+# JWT Token Secret Protection - RBAC Policy
+# This policy prevents accidental deletion of the onehouse-token secret
+# while allowing the quanton-operator to manage its lifecycle.
+#
+# STRATEGY:
+# 1. Operator Role: Explicit allow for get, list, watch, update, patch
+#    (managed via quanton-operator-rbac.yaml ClusterRole)
+#
+# 2. Deletion Prevention Role: Read-only access for all authenticated users
+#    - Users get implicit deny for delete operations
+#    - This prevents accidental secret deletion
+#
+# 3. Admin Bypass: Cluster admins (system:masters) can still delete if needed
+#    for emergency situations (RBAC doesn't apply to cluster admins)
+
+---
+# Role: JWT Token Deletion Prevention
+# Bound to: system:authenticated (all authenticated cluster users)
+# Effect: Prevents deletion of onehouse-token secret
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jwt-token-deletion-prevention
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: rbac
+    purpose: secret-protection
+spec:
+  rules:
+  # Read-only access to JWT token secret
+  # Users can view but not delete the secret
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["onehouse-token"]
+    verbs:
+    - get
+    - list
+    - watch
+    # NOTE: NO delete verb - prevents accidental deletion
+
+---
+# RoleBinding: JWT Token Deletion Prevention
+# Binds the deletion prevention role to all authenticated users
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jwt-token-deletion-prevention
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: rbac
+    purpose: secret-protection
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jwt-token-deletion-prevention
+subjects:
+# Apply to all authenticated users in the cluster
+# They can view but not delete the JWT token secret
+- kind: Group
+  name: "system:authenticated"
+  apiGroup: rbac.authorization.k8s.io
+

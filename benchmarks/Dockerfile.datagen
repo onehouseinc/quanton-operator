@@ -1,0 +1,16 @@
+FROM apache/spark:3.5.0
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc make flex bison git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/gregrahn/tpcds-kit.git /opt/tpcds-kit && \
+    cd /opt/tpcds-kit/tools && \
+    make OS=LINUX && \
+    chmod +x dsdgen
+
+ENV PATH="/opt/tpcds-kit/tools:${PATH}"
+
+USER spark

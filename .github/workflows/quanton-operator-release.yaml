@@ -1,0 +1,43 @@
+name: Quanton Operator Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'Helm chart version (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Package and Push Helm Chart
+        shell: bash
+        env:
+          CHART_VERSION: ${{ inputs.chart_version }}
+          DOCKER_ONEHOUSE_QUANTON_USERNAME: ${{ secrets.DOCKER_ONEHOUSE_QUANTON_USERNAME }}
+          DOCKER_ONEHOUSE_QUANTON_KEY: ${{ secrets.DOCKER_ONEHOUSE_QUANTON_KEY }}
+        run: |
+          CHART_PATH="charts/quanton-operator-chart"
+
+          echo "📦 Packaging chart from $CHART_PATH with version $CHART_VERSION"
+          PACKAGE_FILE=$(helm package "$CHART_PATH" --version "$CHART_VERSION" | awk '{print $NF}')
+
+          echo "🔐 Logging into Docker Hub for chart push"
+          echo "$DOCKER_ONEHOUSE_QUANTON_KEY" | docker login -u "$DOCKER_ONEHOUSE_QUANTON_USERNAME" --password-stdin
+
+          echo "🚀 Pushing chart to Docker Hub OCI registry"
+          helm push "$PACKAGE_FILE" \
+            oci://registry-1.docker.io/$DOCKER_ONEHOUSE_QUANTON_USERNAME
+
+          echo "✅ Chart pushed successfully"
