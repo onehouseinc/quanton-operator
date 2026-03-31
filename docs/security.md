@@ -34,14 +34,6 @@ Secret access is scoped to specific named secrets that are created by and manage
 
 All external communication is encrypted. No inbound network access is required.
 
-## Data Collection
-
-1. The operator sends your entire QuantonSparkApplication yaml to the Onehouse control plane for ease of use and debugging. However, it makes sure that sensitive parameters are masked before sending. Checkout `Spark Parameter Masking` in [configurations](/docs/configurations.md) for more information and controls.
-
-2. The operator collects operational metrics to monitor operator health. Metrics are collected using [OpenTelemetry](https://opentelemetry.io/) and forwarded to the Onehouse control plane. More information about this metrics is available [here](/docs/metrics.md)
-
-3. The operator also collects resource usage metrics to know track how much CPU is used to run drivers/executors spawned by QuantonSparkApplications. More information about this metrics is available [here](/docs/metrics.md)
-
 ## Recommendations
 
 - Use **namespace-restricted mode** (`quantonOperator.jobNamespaces` with explicit namespaces) to limit the operator's scope.
