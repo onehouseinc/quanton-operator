@@ -16,7 +16,6 @@ The operator provides a seamless migration path — submit your existing Spark j
 ## Quick Start
 
 1. Obtain your `onehouse-values.yaml` from the [Onehouse console](https://www.cloud.onehouse.ai).
-
 2. Install the operator:
 
 ```bash
@@ -27,13 +26,13 @@ helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/qu
     -f onehouse-values.yaml
 ```
 
-3. Submit a sample Spark job:
+1. Submit a sample Spark job:
 
 ```bash
 kubectl apply -f examples/quanton-application.yaml
 ```
 
-4. Verify the job output:
+1. Verify the job output:
 
 ```bash
 kubectl logs -f quanton-spark-pi-java-example-driver | grep -i "pi is"
@@ -57,15 +56,17 @@ For a step-by-step walkthrough including local setup with minikube, see the [Get
 
 ## Documentation
 
+
 | Document                                               | Description                                          |
-|--------------------------------------------------------|------------------------------------------------------|
+| ------------------------------------------------------ | ---------------------------------------------------- |
 | [Getting Started](docs/getting-started.md)             | Local setup with minikube and first job submission   |
 | [Configuration Reference](docs/configurations.md)      | All Helm chart parameters                            |
 | [Airflow Provider](docs/airflow.md)                    | Orchestrating Quanton jobs from Apache Airflow       |
 | [Metrics](docs/metrics.md)                             | Telemetry and metrics collection                     |
-| [Security](docs/security.md)                           | All information about security data collection       |
+| [Security](docs/security.md)                           | All information about network security               |
 | [Helm Chart](charts/quanton-operator-chart/README.md)  | Chart-specific installation and upgrade instructions |
 | [Memory configurations](docs/memory-configurations.md) | Understanding and configuring memory for Quanton     |
+
 
 ## Example
 
@@ -120,13 +121,14 @@ claude
 
 Then use either skill:
 
-| Skill | What it does |
-|---|---|
-| `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively. |
-| `/run-tpcds-benchmark` | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. |
+
+| Skill                    | What it does                                                                                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                    |
+| `/run-tpcds-benchmark`   | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. |
+
 
 Both skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://www.cloud.onehouse.ai)) to install the Quanton Operator.
-
 
 ## Benchmarks
 
@@ -139,24 +141,24 @@ For industry standard benchmarks, please refer to the following resources.
 - [Onehouse Quanton vs the latest AWS EMR for Apache Spark Workloads](https://www.onehouse.ai/blog/onehouse-quanton-vs-the-latest-aws-emr-for-apache-spark-workloads)
 - [Apache Iceberg on Quanton: 3x Faster Apache Spark Workloads](https://www.onehouse.ai/blog/apache-iceberg-on-quanton-3x-faster-apache-spark-workloads)
 
-
 ## Community
 
 Join the [Onehouse Community Slack](https://onehouse-community.slack.com/join/shared_invite/zt-3s323tl8w-HKVMu~JirERmsp2Jl3beZg#/shared-invite/email) to connect directly with engineers building Quanton.
-
 
 ## Resources
 
 - [Announcing Apache Spark and SQL on the Onehouse Compute Runtime with Quanton](https://www.onehouse.ai/blog/announcing-spark-and-sql-on-the-onehouse-compute-runtime-with-quanton)
 - [Quanton Linkedin Live Event](https://www.linkedin.com/events/7336071337095942147?viewAsMember=true)
 
-
 ## Release Notes
 
 For information about versions of quanton-operator and quanton images, please checkout [versioning](/docs/versioning.md).
+
+## Data Collection
+
+See [data collection](/docs/data-collection.md).
 
 ## License
 
 Copyright Onehouse, Inc. All rights reserved.
 
-<img referrerpolicy="no-referrer-when-downgrade" src="https://dist.onehouse.ai/a.png?x-pxid=ba6ebae0-a77a-4a1e-8e18-3f9f4146a971" />
