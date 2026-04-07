@@ -26,13 +26,13 @@ helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/qu
     -f onehouse-values.yaml
 ```
 
-1. Submit a sample Spark job:
+3. Submit a sample Spark job:
 
 ```bash
 kubectl apply -f examples/quanton-application.yaml
 ```
 
-1. Verify the job output:
+4. Verify the job output:
 
 ```bash
 kubectl logs -f quanton-spark-pi-java-example-driver | grep -i "pi is"
