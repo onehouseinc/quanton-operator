@@ -27,8 +27,7 @@ metadata:
     app.kubernetes.io/name: onehouse-quanton-operator
     app.kubernetes.io/component: rbac
     purpose: secret-protection
-spec:
-  rules:
+rules:
   # Read-only access to JWT token secret
   # Users can view but not delete the secret
   - apiGroups: [""]
