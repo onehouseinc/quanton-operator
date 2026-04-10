@@ -103,6 +103,10 @@ spec:
         - name: OPERATOR_CONFIG_PATH
           value: "/etc/quanton-operator/config.json"
 
+        # Quanton Spark image for creating spark jobs
+        - name: QUANTON_SPARK_IMAGE
+          value: {{ .Values.onehouseConfig.quantonSparkImage | quote }}
+
         ports:
         - name: metrics
           containerPort: 8080
