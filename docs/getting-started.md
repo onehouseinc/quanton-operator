@@ -83,7 +83,6 @@ Install the Quanton Operator using the `onehouse-values.yaml` downloaded from th
 
 ```bash
 helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version 1.0.0 \
     --namespace quanton-operator \
     --create-namespace \
     --set "quantonOperator.jobNamespaces={default}" \

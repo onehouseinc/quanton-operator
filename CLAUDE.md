@@ -31,7 +31,7 @@ python scripts/transform.py -input <sparkapplication.yaml> -output <output.yaml>
 ### Helm Install
 ```bash
 helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version 1.0.0 --namespace quanton-operator --create-namespace -f onehouse-values.yaml
+    --namespace quanton-operator --create-namespace -f onehouse-values.yaml
 ```
 
 ### TPC-DS Benchmark
