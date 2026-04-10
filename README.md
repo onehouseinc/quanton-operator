@@ -83,7 +83,7 @@ spec:
     mode: cluster
     image: "apache/spark:3.5.0"
     mainClass: org.apache.spark.examples.JavaSparkPi
-    mainApplicationFile: "local:///opt/spark/examples/jars/calculate-pi-example_2.12-3.5.0.jar"
+    mainApplicationFile: "local:///opt/spark/examples/jars/spark-examples_2.12-3.5.0.jar"
     sparkVersion: "3.5.0"
     driver:
       cores: 1

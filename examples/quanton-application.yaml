@@ -10,7 +10,7 @@ spec:
     image: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.206.0-al2023"
     imagePullPolicy: IfNotPresent
     mainClass: org.apache.spark.examples.JavaSparkPi
-    mainApplicationFile: "local:///opt/spark/examples/jars/calculate-pi-example_2.12-3.5.0.jar" # TBD
+    mainApplicationFile: "local:///opt/spark/examples/jars/spark-examples_2.12-3.5.0.jar" # TBD
     arguments:
       - "100"
     sparkVersion: "3.5.0"
