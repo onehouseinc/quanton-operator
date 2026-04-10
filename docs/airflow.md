@@ -49,7 +49,7 @@ with DAG(
             "image": "apache/spark:3.5.0",
             "imagePullPolicy": "IfNotPresent",
             "mainClass": "org.apache.spark.examples.JavaSparkPi",
-            "mainApplicationFile": "local:///opt/spark/examples/jars/spark-examples_2.12-3.5.0.jar",
+            "mainApplicationFile": "local:///opt/spark/examples/jars/calculate-pi-example_2.12-3.5.0.jar",
             "arguments": ["100"],
             "sparkVersion": "3.5.0",
             "restartPolicy": {"type": "Never"},
