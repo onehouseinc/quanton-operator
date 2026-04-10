@@ -42,7 +42,6 @@ To upgrade to a newer Quanton Spark image, use `helm upgrade` with the `--set` f
 
 ```bash
 helm upgrade quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version 1.0.0 \
     --namespace quanton-operator \
     --reuse-values \
     --set onehouseConfig.quantonSparkImage="dist.onehouse.ai/onehouseai/quanton-spark:<new-image-tag>"

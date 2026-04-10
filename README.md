@@ -20,7 +20,6 @@ The operator provides a seamless migration path — submit your existing Spark j
 
 ```bash
 helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version 1.0.0 \
     --namespace quanton-operator \
     --create-namespace \
     -f onehouse-values.yaml

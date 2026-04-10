@@ -25,7 +25,6 @@ kubectl create namespace <your-job-namespace>
 
 ```bash
 helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version 1.0.0 \
     --namespace quanton-operator \
     --create-namespace \
     -f onehouse-values.yaml
@@ -42,7 +41,6 @@ kubectl get secret onehouse-token -n quanton-operator
 
 ```bash
 helm upgrade quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-    --version <new-version> \
     --namespace quanton-operator \
     -f onehouse-values.yaml
 ```

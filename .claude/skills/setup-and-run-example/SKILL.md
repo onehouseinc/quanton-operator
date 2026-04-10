@@ -64,7 +64,6 @@ Run `helm list -A | grep quanton-operator` to see if the Quanton Operator is ins
   2. Once the file exists, install the operator:
      ```
      helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/quanton-operator \
-       --version 1.0.0 \
        --namespace quanton-operator \
        --create-namespace \
        --set "quantonOperator.jobNamespaces={default}" \
