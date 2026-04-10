@@ -112,7 +112,7 @@ kubectl get pods -A | grep driver
 Once the driver pod is running, check the output:
 
 ```bash
-kubectl logs -f quanton-spark-pi-java-example-spark-app-driver | grep -i "pi is"
+kubectl logs -f quanton-spark-pi-java-example-driver | grep -i "pi is"
 ```
 
 Expected output:
