@@ -16,7 +16,7 @@ onehouseConfig:
   imagePullSecrets:
     accessToken: ""
 
-  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.206.0-al2023"
+  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
   authToken: ""
 
 # Quanton Operator configuration
