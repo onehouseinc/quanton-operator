@@ -54,7 +54,7 @@ spec:
   sparkApplicationSpec:
     type: Python
     mode: cluster
-    image: "dist.onehouse.ai/onehouseai/quanton-spark:release-v0.206.0-al2023"
+    image: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
     imagePullPolicy: IfNotPresent
     mainApplicationFile: "local:///mnt/scripts/my_job.py"
     sparkVersion: "3.5.0"
