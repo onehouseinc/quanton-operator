@@ -20,7 +20,7 @@ onehouseConfig:
   authToken: ""
 
   # PEM-encoded per-org public certificate for JWT verification in Spark driver.
-  # Issued by the quanton-operator private CA. Delivered via QuantonOperatorTemplateGenerator.
+  # Issued by the quanton-operator private CA.
   quantonOperatorPublicCert: ""
 
 # Quanton Operator configuration
