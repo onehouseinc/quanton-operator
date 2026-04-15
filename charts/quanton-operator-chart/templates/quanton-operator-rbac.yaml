@@ -88,6 +88,8 @@ rules:
   - onehouse-token
   - onehouse-docker-registry-secret
   - mutual-tls-secret
+  - quanton-operator-cert
+  - quanton-operator-ca-cert
   verbs:
   - get
   - update

@@ -19,6 +19,11 @@ onehouseConfig:
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
   authToken: ""
 
+  # PEM-encoded root CA public certificate for Quanton Operator per-org certificate verification.
+  # This is the trust anchor - the operator verifies per-org certificates against this CA cert.
+  # Will also be refreshable via the RefreshSecrets RPC.
+  quantonOperatorCACert: ""
+
 # Quanton Operator configuration
 quantonOperator:
   # Namespaces where Spark jobs will run
