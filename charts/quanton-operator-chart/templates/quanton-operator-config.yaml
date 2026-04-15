@@ -14,6 +14,5 @@ data:
       "otelServiceName": "quanton-operator",
       "onehouseProjectId": {{ .Values.onehouseConfig.projectId | quote }},
       "onehouseLinkId": {{ .Values.onehouseConfig.linkId | quote }},
-      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
-      "quantonOperatorCACertPath": {{ if .Values.onehouseConfig.quantonOperatorCACert }}"/etc/quanton-operator/certs/ca-cert.pem"{{ else }}""{{ end }}
+      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }}
     }

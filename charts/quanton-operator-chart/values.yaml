@@ -19,10 +19,9 @@ onehouseConfig:
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
   authToken: ""
 
-  # PEM-encoded root CA public certificate for Quanton Operator per-org certificate verification.
-  # This is the trust anchor - the operator verifies per-org certificates against this CA cert.
-  # Will also be refreshable via the RefreshSecrets RPC.
-  quantonOperatorCACert: ""
+  # PEM-encoded per-org public certificate for JWT verification in Spark driver.
+  # Issued by the quanton-operator private CA. Delivered via QuantonOperatorTemplateGenerator.
+  quantonOperatorPublicCert: ""
 
 # Quanton Operator configuration
 quantonOperator:

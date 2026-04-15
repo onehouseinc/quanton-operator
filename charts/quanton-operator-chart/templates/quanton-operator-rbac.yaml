@@ -89,7 +89,7 @@ rules:
   - onehouse-docker-registry-secret
   - mutual-tls-secret
   - quanton-operator-cert
-  - quanton-operator-ca-cert
+  - quanton-operator-public-cert
   verbs:
   - get
   - update
