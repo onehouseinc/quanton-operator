@@ -4,8 +4,6 @@
 onehouseConfig:
   projectId: ""  # Project ID
   linkId: ""     # Request/link ID for the cluster
-  environment: ""     # Deployment environment (e.g., staging, production)
-  cloudProvider: ""   # Cloud provider (e.g., aws, gcp, azure)
 
   # Control plane communication
   endpoint: "gwc.onehouse.ai:443"
