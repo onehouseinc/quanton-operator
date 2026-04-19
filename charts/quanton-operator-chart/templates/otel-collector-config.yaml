@@ -121,19 +121,9 @@ data:
       debug:
         verbosity: detailed
 
-      # Prometheus remote write exporter to forward metrics via dp-proxy to metrics endpoint
-      {{- if .Values.onehouseConfig.metricsEndpoint }}
-      prometheusremotewrite/dp:
-        endpoint: "http://localhost:8093/api/v1/write"
-        tls:
-          insecure: true
-        resource_to_telemetry_conversion:
-          enabled: true
-      {{- end }}
-
       # OTLP gRPC exporter to the operator's billing gRPC server (port 4320).
       # The operator converts OTLP to ControlPlaneSyncRequest{billing:...} and
-      # calls OrgManagementService/ControlPlaneSync via dp-proxy.
+      # calls OrgManagementService/ControlPlaneSync directly via mTLS.
       # Metrics are persisted to disk via file_storage/billing so they survive
       # network failures and are retried automatically when connectivity is restored.
       otlp/billing:
@@ -169,7 +159,7 @@ data:
         metrics:
           receivers: [prometheus, otlp]
           processors: [memory_limiter, attributes, resource/source, resourcedetection/env, batch]
-          exporters: [file, debug{{ if .Values.onehouseConfig.metricsEndpoint }}, prometheusremotewrite/dp{{ end }}]
+          exporters: [file, debug]
 
         # Traces pipeline
         traces:
