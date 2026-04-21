@@ -1,4 +1,3 @@
-{{- if not (and .Values.onehouseConfig.mtls .Values.onehouseConfig.mtls.clientCert .Values.onehouseConfig.mtls.clientKey) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -125,4 +124,3 @@ spec:
                   values:
                   - dp-proxy
               topologyKey: kubernetes.io/hostname
-{{- end }}

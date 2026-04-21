@@ -1,4 +1,3 @@
-{{- if not (and .Values.onehouseConfig.mtls .Values.onehouseConfig.mtls.clientCert .Values.onehouseConfig.mtls.clientKey) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -178,4 +177,3 @@ data:
         socket_address:
           address: 0.0.0.0
           port_value: 8092
-{{- end }}
