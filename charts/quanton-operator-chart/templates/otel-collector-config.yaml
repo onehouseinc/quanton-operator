@@ -88,7 +88,7 @@ data:
       # ── Billing pipeline processors ──────────────────────────────────────
       # Output: OTLP gRPC → operator port 4320 (billingserver)
       # The operator converts the OTLP payload to ControlPlaneSyncRequest{billing:...}
-      # and calls OrgManagementService/ControlPlaneSync via dp-proxy.
+      # and calls OrgManagementService/ControlPlaneSync.
 
       # Drop pods not in the configured job namespaces (when namespace-restricted mode is active).
       # kube-state-metrics exposes namespace as a datapoint label (metric attribute).
@@ -121,7 +121,7 @@ data:
       debug:
         verbosity: detailed
 
-      # Prometheus remote write exporter to forward metrics via dp-proxy to metrics endpoint
+      # Prometheus remote write exporter to forward metrics to metrics endpoint
       {{- if .Values.onehouseConfig.metricsEndpoint }}
       prometheusremotewrite/dp:
         endpoint: "http://localhost:8093/api/v1/write"
@@ -133,7 +133,7 @@ data:
 
       # OTLP gRPC exporter to the operator's billing gRPC server (port 4320).
       # The operator converts OTLP to ControlPlaneSyncRequest{billing:...} and
-      # calls OrgManagementService/ControlPlaneSync via dp-proxy.
+      # calls OrgManagementService/ControlPlaneSync.
       # Metrics are persisted to disk via file_storage/billing so they survive
       # network failures and are retried automatically when connectivity is restored.
       otlp/billing:
