@@ -16,5 +16,9 @@ data:
       "onehouseLinkId": {{ .Values.onehouseConfig.linkId | quote }},
       "onehouseEnvironment": {{ .Values.onehouseConfig.environment | quote }},
       "onehouseCloudProvider": {{ .Values.onehouseConfig.cloudProvider | quote }},
-      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }}
+      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
+      "gwcEndpoint": {{ .Values.onehouseConfig.endpoint | quote }},
+      "metricsEndpoint": {{ .Values.onehouseConfig.metricsEndpoint | quote }},
+      "mtlsCertPath": "/etc/mtls/client-cert.pem",
+      "mtlsKeyPath": "/etc/mtls/client-key.pem"
     }

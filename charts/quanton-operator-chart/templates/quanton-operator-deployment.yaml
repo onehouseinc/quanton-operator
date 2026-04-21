@@ -140,6 +140,11 @@ spec:
         - name: operator-config
           mountPath: /etc/quanton-operator
           readOnly: true
+        {{- if and .Values.onehouseConfig.mtls .Values.onehouseConfig.mtls.clientCert .Values.onehouseConfig.mtls.clientKey }}
+        - name: mtls-certs
+          mountPath: /etc/mtls
+          readOnly: true
+        {{- end }}
 
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
@@ -231,6 +236,12 @@ spec:
         emptyDir: {}
       - name: billing-queue-storage
         emptyDir: {}
+      {{- if and .Values.onehouseConfig.mtls .Values.onehouseConfig.mtls.clientCert .Values.onehouseConfig.mtls.clientKey }}
+      - name: mtls-certs
+        secret:
+          secretName: mutual-tls-secret
+          defaultMode: 0400
+      {{- end }}
 
       {{- with .Values.quantonOperator.nodeSelector }}
       nodeSelector:

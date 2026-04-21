@@ -1,3 +1,4 @@
+{{- if not (and .Values.onehouseConfig.mtls .Values.onehouseConfig.mtls.clientCert .Values.onehouseConfig.mtls.clientKey) }}
 # Service for DP Proxy (gRPC communication with control plane)
 apiVersion: v1
 kind: Service
@@ -18,3 +19,4 @@ spec:
     port: 8091
     targetPort: 8091
     protocol: TCP
+{{- end }}
