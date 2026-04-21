@@ -14,5 +14,11 @@ data:
       "otelServiceName": "quanton-operator",
       "onehouseProjectId": {{ .Values.onehouseConfig.projectId | quote }},
       "onehouseLinkId": {{ .Values.onehouseConfig.linkId | quote }},
-      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }}
+      "onehouseEnvironment": {{ .Values.onehouseConfig.environment | quote }},
+      "onehouseCloudProvider": {{ .Values.onehouseConfig.cloudProvider | quote }},
+      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
+      "gwcEndpoint": {{ .Values.onehouseConfig.endpoint | quote }},
+      "metricsEndpoint": {{ .Values.onehouseConfig.metricsEndpoint | quote }},
+      "mtlsCertPath": "/etc/mtls/client-cert.pem",
+      "mtlsKeyPath": "/etc/mtls/client-key.pem"
     }
