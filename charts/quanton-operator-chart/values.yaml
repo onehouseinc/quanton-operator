@@ -15,6 +15,10 @@ onehouseConfig:
     clientCert: ""  # Client certificate (PEM format, will be base64-encoded in K8s secret)
     clientKey: ""   # Client private key (PEM format, will be base64-encoded in K8s secret)
 
+  # Per-org public certificate signed by the Quanton Operator CA.
+  # Used to verify JWT token signatures. Must be provided at install time.
+  quantonOperatorPublicCert: ""  # PEM format
+
   imagePullSecrets:
     accessToken: ""
 

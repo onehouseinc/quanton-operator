@@ -143,6 +143,9 @@ spec:
         - name: mtls-certs
           mountPath: /etc/mtls
           readOnly: true
+        - name: quanton-operator-cert
+          mountPath: /etc/quanton-operator-cert
+          readOnly: true
 
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
@@ -237,6 +240,10 @@ spec:
       - name: mtls-certs
         secret:
           secretName: mutual-tls-secret
+          defaultMode: 0400
+      - name: quanton-operator-cert
+        secret:
+          secretName: quanton-operator-cert
           defaultMode: 0400
 
       {{- with .Values.quantonOperator.nodeSelector }}
