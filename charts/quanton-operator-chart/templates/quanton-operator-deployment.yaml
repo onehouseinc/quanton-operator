@@ -90,15 +90,6 @@ spec:
             fieldRef:
               fieldPath: status.podIP
 
-        # JWT Token for Control Plane auth (if configured)
-        {{- if .Values.onehouseConfig.authToken }}
-        - name: ONEHOUSE_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: onehouse-token
-              key: JWT_TOKEN
-        {{- end }}
-
         # Path to operator config file (mounted from ConfigMap)
         - name: OPERATOR_CONFIG_PATH
           value: "/etc/quanton-operator/config.json"
@@ -145,6 +136,9 @@ spec:
           readOnly: true
         - name: quanton-operator-cert
           mountPath: /etc/quanton-operator-cert
+          readOnly: true
+        - name: jwt-token
+          mountPath: /etc/jwt-token
           readOnly: true
 
       # OTel Collector sidecar (for metrics/telemetry export)
@@ -245,6 +239,11 @@ spec:
         secret:
           secretName: quanton-operator-cert
           defaultMode: 0400
+      - name: jwt-token
+        secret:
+          secretName: onehouse-token
+          defaultMode: 0400
+          optional: true
 
       {{- with .Values.quantonOperator.nodeSelector }}
       nodeSelector:
