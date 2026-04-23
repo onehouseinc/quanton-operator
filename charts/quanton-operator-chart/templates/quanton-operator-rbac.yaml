@@ -87,6 +87,7 @@ rules:
   resourceNames:
   - onehouse-docker-registry-secret
   - mutual-tls-secret
+  - quanton-operator-cert
   verbs:
   - get
   - update

@@ -2,22 +2,9 @@
 
 # This configuration will be provided by Onehouse.
 onehouseConfig:
-  projectId: ""  # Project ID
-  linkId: ""     # Request/link ID for the cluster
-  environment: ""     # Control Plane Deployment environment (e.g., staging, production)
-  cloudProvider: ""   # Control Plane Cloud provider (e.g., aws, gcp)
-
-  # Control plane communication
-  endpoint: "gwc.onehouse.ai:443"
-  # Metrics remote write endpoint (host:port) for forwarding operator metrics
-  metricsEndpoint: "metrics.onehouse.ai:443"
   mtls:
     clientCert: ""  # Client certificate (PEM format, will be base64-encoded in K8s secret)
     clientKey: ""   # Client private key (PEM format, will be base64-encoded in K8s secret)
-
-  # Per-org public certificate signed by the Quanton Operator CA.
-  # Used to verify per-job token signatures. Must be provided at install time.
-  quantonOperatorPublicCert: ""  # PEM format
 
   imagePullSecrets:
     accessToken: ""

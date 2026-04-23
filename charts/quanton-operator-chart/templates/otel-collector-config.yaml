@@ -67,12 +67,6 @@ data:
           - key: source
             value: "quanton-operator"
             action: upsert
-          - key: projectId
-            value: {{ .Values.onehouseConfig.projectId | quote }}
-            action: upsert
-          - key: linkId
-            value: {{ .Values.onehouseConfig.linkId | quote }}
-            action: upsert
 
       # Memory limiter to prevent OOM
       memory_limiter:
@@ -121,15 +115,15 @@ data:
       debug:
         verbosity: detailed
 
-      # Prometheus remote write exporter to forward metrics to metrics endpoint
-      {{- if .Values.onehouseConfig.metricsEndpoint }}
+      # Prometheus remote write exporter to forward metrics to metrics endpoint.
+      # Writes to the operator's metrics proxy (localhost:8093) which decides
+      # whether to forward based on the derived metricsEndpoint.
       prometheusremotewrite/dp:
         endpoint: "http://localhost:8093/api/v1/write"
         tls:
           insecure: true
         resource_to_telemetry_conversion:
           enabled: true
-      {{- end }}
 
       # OTLP gRPC exporter to the operator's billing gRPC server (port 4320).
       # The operator converts OTLP to ControlPlaneSyncRequest{billing:...} and
@@ -169,7 +163,7 @@ data:
         metrics:
           receivers: [prometheus, otlp]
           processors: [memory_limiter, attributes, resource/source, resourcedetection/env, batch]
-          exporters: [file, debug{{ if .Values.onehouseConfig.metricsEndpoint }}, prometheusremotewrite/dp{{ end }}]
+          exporters: [file, debug, prometheusremotewrite/dp]
 
         # Traces pipeline
         traces:
