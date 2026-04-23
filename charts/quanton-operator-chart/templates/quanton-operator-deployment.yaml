@@ -71,8 +71,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
 
-        # Operator namespace (used for JWT token manager initialization)
-        # This is where the operator's JWT token secret is stored
+        # Operator namespace
         - name: OPERATOR_NAMESPACE
           valueFrom:
             fieldRef:
@@ -137,10 +136,6 @@ spec:
         - name: quanton-operator-cert
           mountPath: /etc/quanton-operator-cert
           readOnly: true
-        - name: jwt-token
-          mountPath: /etc/jwt-token
-          readOnly: true
-
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
       - name: otel-collector
@@ -240,10 +235,6 @@ spec:
           secretName: quanton-operator-cert
           defaultMode: 0400
           optional: true
-      - name: jwt-token
-        secret:
-          secretName: onehouse-token
-          defaultMode: 0400
           optional: true
 
       {{- with .Values.quantonOperator.nodeSelector }}
