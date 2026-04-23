@@ -23,7 +23,7 @@ The operator uses a dedicated `quanton-operator` ServiceAccount with a ClusterRo
 
 | Resource | API Group | Verbs | Purpose | Scope |
 |---|---|---|---|---|
-| `deployments` | `apps` | get, list, patch, update, watch | Restart dp-proxy on certificate refresh | quanton-operator namespace only |
+| `deployments` | `apps` | get, list, patch, update, watch | Manage operator deployments on certificate refresh | quanton-operator namespace only |
 
 ### Secret Access
 
