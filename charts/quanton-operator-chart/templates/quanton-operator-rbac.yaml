@@ -79,13 +79,12 @@ rules:
   - watch
 
 # Scoped secret management - restricted to operator-managed secrets only
-# Operator needs to read/update these secrets for JWT token refresh and image pull credentials
+# Operator needs to read/update these secrets for image pull credentials and mTLS
 - apiGroups:
   - ""
   resources:
   - secrets
   resourceNames:
-  - onehouse-token
   - onehouse-docker-registry-secret
   - mutual-tls-secret
   verbs:

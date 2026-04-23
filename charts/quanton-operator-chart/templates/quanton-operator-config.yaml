@@ -21,6 +21,5 @@ data:
       "metricsEndpoint": {{ .Values.onehouseConfig.metricsEndpoint | quote }},
       "mtlsCertPath": "/etc/mtls/client-cert.pem",
       "mtlsKeyPath": "/etc/mtls/client-key.pem",
-      "quantonOperatorCertPath": "/etc/quanton-operator-cert/public-cert.pem",
-      "jwtTokenPath": "/etc/jwt-token/JWT_TOKEN"
+      "quantonOperatorCertPath": "/etc/quanton-operator-cert/public-cert.pem"
     }

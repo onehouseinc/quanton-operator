@@ -16,14 +16,13 @@ onehouseConfig:
     clientKey: ""   # Client private key (PEM format, will be base64-encoded in K8s secret)
 
   # Per-org public certificate signed by the Quanton Operator CA.
-  # Used to verify JWT token signatures. Must be provided at install time.
+  # Used to verify per-job token signatures. Must be provided at install time.
   quantonOperatorPublicCert: ""  # PEM format
 
   imagePullSecrets:
     accessToken: ""
 
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
-  authToken: ""
 
 # Quanton Operator configuration
 quantonOperator:

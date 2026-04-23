@@ -34,7 +34,6 @@ helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/qu
 
 ```bash
 kubectl get pods -n quanton-operator
-kubectl get secret onehouse-token -n quanton-operator
 ```
 
 ## Upgrading
@@ -66,7 +65,6 @@ Key parameters:
 |---|---|---|
 | `onehouseConfig.projectId` | Onehouse project ID | `""` |
 | `onehouseConfig.linkId` | Cluster link ID | `""` |
-| `onehouseConfig.authToken` | JWT authentication token | `""` |
 | `quantonOperator.jobNamespaces` | Namespaces where Spark jobs run | `["default"]` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
 | `quantonOperator.image` | Operator container image | `onehouseai/quanton-controller:1.0.0` |
@@ -82,7 +80,7 @@ The chart deploys the following resources:
 | ClusterRole / ClusterRoleBinding | Permissions for managing CRDs, pods, secrets, and leases |
 | Service (`quanton-operator`) | ClusterIP service exposing metrics (`:8080`) and health (`:8081`) endpoints |
 | CRD (`QuantonSparkApplication`) | Custom resource definition for submitting Quanton Spark jobs |
-| Secrets | JWT token, mTLS certificates, and Docker registry credentials |
+| Secrets | mTLS certificates and Docker registry credentials |
 
 ## Health Checks
 
