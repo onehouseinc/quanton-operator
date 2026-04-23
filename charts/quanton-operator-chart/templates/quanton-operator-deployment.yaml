@@ -239,6 +239,7 @@ spec:
         secret:
           secretName: quanton-operator-cert
           defaultMode: 0400
+          optional: true
       - name: jwt-token
         secret:
           secretName: onehouse-token
