@@ -31,7 +31,7 @@ spec:
 
       {{- if .Values.onehouseConfig.imagePullSecrets.accessToken }}
       imagePullSecrets:
-        - name: onehouse-docker-registry-secret
+        - name: quanton-operator-docker-secret
       {{- end }}
 
       # Security context to allow OTEL collector (UID 10001) to write to metrics-storage volume
@@ -225,7 +225,7 @@ spec:
         emptyDir: {}
       - name: mtls-certs
         secret:
-          secretName: mutual-tls-secret
+          secretName: quanton-operator-mtls-secret
           defaultMode: 0400
 
       {{- with .Values.quantonOperator.nodeSelector }}
