@@ -92,14 +92,19 @@ rules:
   - get
   - update
   - patch
-# create, list, watch cannot be scoped by resourceNames
+# Per-job token secrets (quanton-job-token-*) and secret syncing require
+# full CRUD across namespaces; create/list/watch cannot be scoped by resourceNames
 - apiGroups:
   - ""
   resources:
   - secrets
   verbs:
   - create
+  - delete
+  - get
   - list
+  - patch
+  - update
   - watch
 
 - apiGroups:
