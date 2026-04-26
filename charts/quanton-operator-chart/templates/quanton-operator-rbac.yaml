@@ -78,6 +78,21 @@ rules:
   - update
   - watch
 
+{{- if not .Values.quantonOperator.jobNamespaces }}
+# Broad secret management - no jobNamespaces specified, grant cluster-wide access
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- else }}
 # Scoped secret management - restricted to operator-managed secrets only
 # Operator needs to read/update these secrets for image pull credentials and mTLS
 - apiGroups:
@@ -101,6 +116,7 @@ rules:
   - create
   - list
   - watch
+{{- end }}
 
 - apiGroups:
   - ""
