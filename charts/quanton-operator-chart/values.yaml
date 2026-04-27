@@ -11,6 +11,9 @@ onehouseConfig:
 
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
 
+  # Enable AI agent plugin for Spark applications
+  enableAIAgent: true
+
 # Quanton Operator configuration
 quantonOperator:
   # Namespaces where Spark jobs will run

@@ -15,5 +15,6 @@ data:
       "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
       "mtlsCertPath": "/etc/mtls/client-cert.pem",
       "mtlsKeyPath": "/etc/mtls/client-key.pem",
-      "helmChartVersion": {{ .Chart.Version | quote }}
+      "helmChartVersion": {{ .Chart.Version | quote }},
+      "enableAIAgent": {{ .Values.onehouseConfig.enableAIAgent }}
     }
