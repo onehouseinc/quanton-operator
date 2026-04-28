@@ -133,6 +133,8 @@ spec:
         - name: mtls-certs
           mountPath: /etc/mtls
           readOnly: true
+        - name: metrics-queue-storage
+          mountPath: /var/log/operator-metrics-queue
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
       - name: otel-collector
@@ -179,11 +181,11 @@ spec:
           readOnly: true
         - name: metrics-storage
           mountPath: /var/log/otel-metrics
-        - name: billing-queue-storage
-          mountPath: /var/log/otel-billing-queue
+        - name: otel-queue-storage
+          mountPath: /var/log/otel-queue
 
-      # kube-state-metrics sidecar: exposes kube_pod_labels Prometheus metric with all pod labels.
-      # Scoped to job namespaces only. OTEL prometheus/billing receiver scrapes localhost:8082.
+      # kube-state-metrics sidecar: exposes pod resource metrics.
+      # Scoped to job namespaces only. OTEL prometheus/ksm receiver scrapes localhost:8082.
       - name: kube-state-metrics
         image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.14.0
         imagePullPolicy: IfNotPresent
@@ -221,7 +223,9 @@ spec:
           defaultMode: 0644
       - name: metrics-storage
         emptyDir: {}
-      - name: billing-queue-storage
+      - name: otel-queue-storage
+        emptyDir: {}
+      - name: metrics-queue-storage
         emptyDir: {}
       - name: mtls-certs
         secret:
