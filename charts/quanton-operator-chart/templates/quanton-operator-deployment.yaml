@@ -133,8 +133,6 @@ spec:
         - name: mtls-certs
           mountPath: /etc/mtls
           readOnly: true
-        - name: metrics-queue-storage
-          mountPath: /var/log/operator-metrics-queue
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
       - name: otel-collector
@@ -224,8 +222,6 @@ spec:
       - name: metrics-storage
         emptyDir: {}
       - name: otel-queue-storage
-        emptyDir: {}
-      - name: metrics-queue-storage
         emptyDir: {}
       - name: mtls-certs
         secret:
