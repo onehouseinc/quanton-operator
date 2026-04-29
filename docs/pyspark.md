@@ -54,7 +54,7 @@ spec:
   sparkApplicationSpec:
     type: Python
     mode: cluster
-    image: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023-quanton-operator"
+    image: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
     imagePullPolicy: IfNotPresent
     mainApplicationFile: "local:///mnt/scripts/my_job.py"
     sparkVersion: "3.5.0"

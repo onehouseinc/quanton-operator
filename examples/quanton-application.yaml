@@ -7,7 +7,7 @@ spec:
   sparkApplicationSpec:
     type: Java
     mode: cluster
-    image: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023-quanton-operator"
+    image: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
     imagePullPolicy: IfNotPresent
     mainClass: org.apache.spark.examples.JavaSparkPi
     mainApplicationFile: "local:///opt/spark/examples/jars/calculate-pi-example_2.12-3.5.0.jar" # TBD
