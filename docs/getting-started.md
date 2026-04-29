@@ -2,10 +2,13 @@
 
 This guide walks through setting up a local Kubernetes cluster with minikube, installing the Spark Operator and Quanton Operator, and running your first Quanton-powered Spark job.
 
+> **Upgrading from v1.x?** This guide covers Quanton Operator v2.0.0. If upgrading from v1.x, see the [release notes](versioning.md) for breaking changes.
+
 ## Prerequisites
 
 - [minikube](https://minikube.sigs.k8s.io/docs/start/) installed
 - [Helm](https://helm.sh/docs/intro/install/) >= 3.x installed
+- [Spark Operator](https://github.com/kubeflow/spark-operator) 2.x.x or later
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) installed
 - Download `onehouse-values.yaml` from the Onehouse Quanton Operator [project homepage](https://cloud.onehouse.ai/\<organizationId\>/home) — (replace `<organizationId>` with your Onehouse organization ID)
 
