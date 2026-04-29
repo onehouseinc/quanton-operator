@@ -9,7 +9,7 @@ onehouseConfig:
   imagePullSecrets:
     accessToken: ""
 
-  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
+  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023-quanton-operator"
 
   # Enable AI agent plugin for Spark applications
   enableAIAgent: false
@@ -36,7 +36,7 @@ quantonOperator:
   nodeSelector: {}
     # node-type: "compute"
 
-  image: "dist.onehouse.ai/onehouseai/quanton-controller:2.0.0"
+  image: "dist.onehouse.ai/onehouseai/quanton-controller:2.0.1"
   pullPolicy: IfNotPresent
 
   replicas: 1
