@@ -6,16 +6,18 @@ allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 
 # Clean Uninstall Quanton Operator
 
-Fully removes the Quanton Operator Helm release and cleans up secrets it created across namespaces.
+Fully removes the Quanton Operator Helm release, cleans up secrets it created across namespaces, and removes the CRD.
 
 ## Why This Exists
 
-`helm uninstall` removes the chart resources but leaves behind secrets the operator replicated to job namespaces:
-- `quanton-operator-cert`
-- `quanton-operator-docker-secret`
-- `quanton-operator-mtls-secret`
+`helm uninstall` removes the chart resources but leaves behind:
+- **Secrets** the operator replicated to job namespaces:
+  - `quanton-operator-cert`
+  - `quanton-operator-docker-secret`
+  - `quanton-operator-mtls-secret`
+- **The CRD** (`quantonsparkapplications.quantonsparkoperator.onehouse.ai`) — Helm never deletes CRDs on uninstall by design.
 
-The cleanup script at `scripts/cleanup-secrets.sh` handles finding and deleting these.
+The cleanup script at `scripts/cleanup-secrets.sh` handles finding and deleting secrets and the CRD.
 
 ## Execution Flow
 
@@ -29,9 +31,10 @@ Run these and show the user what's installed:
 ```bash
 helm list -A | grep quanton-operator
 kubectl get secrets -A | grep quanton-operator
+kubectl get crd quantonsparkapplications.quantonsparkoperator.onehouse.ai 2>/dev/null
 ```
 
-If neither the Helm release nor any secrets are found, tell the user there's nothing to clean up and stop.
+If neither the Helm release, secrets, nor CRD are found, tell the user there's nothing to clean up and stop.
 
 ### Step 3: Confirm with user
 
@@ -46,7 +49,7 @@ helm uninstall quanton-operator -n quanton-operator
 
 Wait for completion. If the namespace `quanton-operator` is now empty, ask the user if they'd like to delete it too.
 
-### Step 5: Clean up secrets
+### Step 5: Clean up secrets and CRD
 
 Run the cleanup script in dry-run mode first to show what will be deleted:
 ```bash
@@ -60,7 +63,13 @@ Then run with `--confirm`:
 
 ### Step 6: Verify
 
-Run `kubectl get secrets -A | grep quanton-operator` to confirm everything is gone. Report the result to the user.
+Run these to confirm everything is gone:
+```bash
+kubectl get secrets -A | grep quanton-operator
+kubectl get crd quantonsparkapplications.quantonsparkoperator.onehouse.ai 2>/dev/null
+```
+
+Report the result to the user.
 
 ## Error Handling
 

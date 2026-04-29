@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Clean up secrets created by quanton-operator after chart uninstall.
+# Clean up secrets and CRD created by quanton-operator after chart uninstall.
 #
 # The operator creates these secrets in the release namespace and replicates
 # them to every job namespace:
 #   - quanton-operator-cert           (Opaque)
 #   - quanton-operator-docker-secret  (kubernetes.io/dockerconfigjson)
 #   - quanton-operator-mtls-secret    (Opaque)
+#
+# Helm never deletes CRDs on uninstall, so this script also removes:
+#   - quantonsparkapplications.quantonsparkoperator.onehouse.ai
 #
 # Usage:
 #   ./cleanup-secrets.sh                        # dry-run (default)
@@ -19,6 +22,8 @@ SECRETS=(
   "quanton-operator-docker-secret"
   "quanton-operator-mtls-secret"
 )
+
+CRD_NAME="quantonsparkapplications.quantonsparkoperator.onehouse.ai"
 
 DRY_RUN=true
 TARGET_NAMESPACE=""
@@ -85,14 +90,26 @@ for secret_name in "${SECRETS[@]}"; do
   done
 done
 
-if [[ $deleted -eq 0 ]]; then
-  echo "No quanton-operator secrets found."
+# Clean up CRD
+crd_found=false
+if kubectl get crd "$CRD_NAME" &>/dev/null; then
+  crd_found=true
+  if $DRY_RUN; then
+    echo "[dry-run] would delete CRD ${CRD_NAME}"
+  else
+    echo "Deleting CRD ${CRD_NAME} (this also removes all QuantonSparkApplication resources)..."
+    kubectl delete crd "$CRD_NAME"
+  fi
+fi
+
+if [[ $deleted -eq 0 ]] && ! $crd_found; then
+  echo "No quanton-operator secrets or CRD found."
 else
   if $DRY_RUN; then
     echo
-    echo "Found ${deleted} secret(s). Re-run with --confirm to delete."
+    echo "Found ${deleted} secret(s)$( $crd_found && echo " and 1 CRD" || true). Re-run with --confirm to delete."
   else
     echo
-    echo "Deleted ${deleted} secret(s)."
+    echo "Deleted ${deleted} secret(s)$( $crd_found && echo " and 1 CRD" || true)."
   fi
 fi
