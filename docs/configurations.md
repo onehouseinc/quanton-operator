@@ -13,17 +13,15 @@ helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/qu
 ## Onehouse Configuration
 These values are typically pre-populated in the `onehouse-values.yaml` provided by Onehouse. Do not modify them unless instructed by Onehouse support.
 
+> **Note:** Connection parameters (`projectId`, `linkId`, `endpoint`, `metricsEndpoint`, `authToken`) are no longer required in v2.0.0. These are now automatically derived from the mTLS certificate.
+
 | Parameter | Description | Default |
 |---|---|---|
-| `onehouseConfig.projectId` | Organization project ID assigned by Onehouse | `""` |
-| `onehouseConfig.linkId` | Cluster link ID assigned by Onehouse | `""` |
-| `onehouseConfig.endpoint` | Control plane gRPC endpoint | `gwc.onehouse.ai:443` |
-| `onehouseConfig.metricsEndpoint` | Metrics forwarding endpoint | `metrics.onehouse.ai:443` |
 | `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
 | `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
 | `onehouseConfig.imagePullSecrets.accessToken` | Docker registry access token for pulling Onehouse images | `""` |
 | `onehouseConfig.quantonSparkImage` | Quanton Spark runtime image | `dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023` |
-| `onehouseConfig.authToken` | JWT token for control plane authentication | `""` |
+| `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `false` |
 
 
 ## Operator Configuration
@@ -32,7 +30,7 @@ These values control the behavior and resource allocation of the Quanton Operato
 
 | Parameter | Description | Default |
 |---|---|---|
-| `quantonOperator.image` | Operator container image | `onehouseai/quanton-controller:1.0.0` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.0` |
 | `quantonOperator.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
 | `quantonOperator.serviceAccount.name` | Service account name for the operator | `quanton-operator` |
@@ -119,10 +117,6 @@ For running PySpark workloads and selecting a specific Python version (3.9, 3.11
 
 ```yaml
 onehouseConfig:
-  projectId: "your-project-id"
-  linkId: "your-link-id"
-  endpoint: "onehouse-control-plane-endpoint"
-  metricsEndpoint: "onehouse-metrics-endpoint"
   mtls:
     clientCert: |
       -----BEGIN CERTIFICATE-----
@@ -135,7 +129,7 @@ onehouseConfig:
   imagePullSecrets:
     accessToken: "your-docker-access-token"
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
-  authToken: "your-jwt-token"
+  enableAIAgent: false
 
 quantonOperator:
   jobNamespaces:

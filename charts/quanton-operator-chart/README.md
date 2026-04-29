@@ -6,7 +6,7 @@ Helm chart for deploying the Quanton Operator on Kubernetes.
 
 - Kubernetes >= 1.28
 - Helm >= 3.x
-- [Spark Operator](https://github.com/kubeflow/spark-operator) (v1.x or v2.x) installed on the cluster
+- [Spark Operator](https://github.com/kubeflow/spark-operator) 2.x.x or later installed on the cluster
 - An `onehouse-values.yaml` file from your [Onehouse account](https://www.onehouse.ai)
 
 ## Installation
@@ -63,11 +63,12 @@ Key parameters:
 
 | Parameter | Description | Default |
 |---|---|---|
-| `onehouseConfig.projectId` | Onehouse project ID | `""` |
-| `onehouseConfig.linkId` | Cluster link ID | `""` |
+| `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
+| `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
+| `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `false` |
 | `quantonOperator.jobNamespaces` | Namespaces where Spark jobs run | `["default"]` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
-| `quantonOperator.image` | Operator container image | `onehouseai/quanton-controller:1.0.0` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.0` |
 
 ## Chart Components
 
