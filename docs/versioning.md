@@ -2,7 +2,28 @@
 
 ## Quanton Operator Helm Chart
 
-### v1.0.0
+### v2.0.0
+
+Major release of the Quanton Operator with enhanced security, simplified configuration, and AI agent support.
+
+**Breaking Changes:**
+
+- Requires **Spark Operator 2.x.x or later**. Spark Operator 1.x.x is not compatible with this release.
+- Removed `projectId`, `linkId`, `endpoint`, `metricsEndpoint`, and `authToken` from Helm values. These parameters are now automatically derived from the mTLS certificate.
+- Removed dp-proxy. The operator now communicates directly with the Onehouse control plane via mTLS.
+
+**Highlights:**
+
+- Direct mTLS communication with the Onehouse control plane (dp-proxy removed)
+- Simplified JWT handling — authentication tokens are now managed through the mTLS flow rather than as a separate Kubernetes secret
+- AI agent support for Spark applications (`enableAIAgent` configuration option)
+- Simplified OpenTelemetry collector configuration
+- Conditional cluster-wide secret permissions when running in all-namespaces mode
+- Helm chart version is now included in operator configuration
+
+### v1.0.0 (Deprecated)
+
+> **Warning:** v1.0.0 is fully deprecated and should not be used. Please upgrade to v2.0.0.
 
 First public release of the Quanton Operator. This release provides a Kubernetes operator that extends [kubeflow/spark-operator](https://github.com/kubeflow/spark-operator) to run Apache Spark jobs using the Quanton compute engine by Onehouse.
 

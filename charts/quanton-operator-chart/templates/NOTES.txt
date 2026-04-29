@@ -21,10 +21,7 @@ Quick Commands:
 2. View Quanton Operator logs:
    kubectl logs -n {{ .Release.Namespace }} deployment/quanton-controller
 
-3. Verify JWT token secret:
-   kubectl get secret onehouse-token -n {{ .Release.Namespace }}
-
-4. Create a QuantonSparkApplication:
+3. Create a QuantonSparkApplication:
    kubectl apply -f your-spark-app.yaml -n {{ .Release.Namespace }}
 
 For more information, visit: https://docs.onehouse.ai/quanton

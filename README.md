@@ -9,7 +9,7 @@ The operator provides a seamless migration path — submit your existing Spark j
 - Kubernetes >= 1.28
 - Helm >= 3.x
 - kubectl configured for your cluster
-- [Spark Operator](https://github.com/kubeflow/spark-operator) (v1.x or v2.x) installed on the cluster
+- [Spark Operator](https://github.com/kubeflow/spark-operator) (v 2.x.x) installed on the cluster
 - An [Onehouse](https://www.onehouse.ai) account with Quanton access
 - Network access to `*.onehouse.ai` and `*.docker.io`
 

@@ -9,7 +9,7 @@ The `QuantonSparkApplicationOperator` creates a `QuantonSparkApplication` Custom
 ## Prerequisites
 
 - Apache Airflow >= 2.7.0
-- Quanton Operator >= 1.0.0 installed on the target Kubernetes cluster
+- Quanton Operator >= 2.0.0 installed on the target Kubernetes cluster
 - Airflow configured with a Kubernetes connection to the cluster
 
 ## Installation

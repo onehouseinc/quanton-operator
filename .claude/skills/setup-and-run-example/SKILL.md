@@ -47,6 +47,7 @@ Run `helm list -A | grep spark-operator` to see if the Spark Operator is install
   helm install spark-operator spark-operator/spark-operator \
     --namespace spark-operator \
     --create-namespace \
+    --version 2.5.0 \
     --set "spark.jobNamespaces={default}"
   ```
   Wait for the spark-operator pod to be Running: `kubectl get pods -n spark-operator`
@@ -97,8 +98,8 @@ Print a clear summary:
 Setup complete!
 
   Minikube:         Running
-  Spark Operator:   Installed (vX.Y.Z)
-  Quanton Operator: Installed (v1.0.0)
+  Spark Operator:   Installed (v2.5.0)
+  Quanton Operator: Installed (v2.0.0)
   Example Job:      Completed - Pi = 3.14159...
 
 Your local Quanton environment is ready. You can now:

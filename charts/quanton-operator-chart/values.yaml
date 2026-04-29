@@ -2,13 +2,6 @@
 
 # This configuration will be provided by Onehouse.
 onehouseConfig:
-  projectId: ""  # Project ID
-  linkId: ""     # Request/link ID for the cluster
-
-  # Control plane communication
-  endpoint: "gwc.onehouse.ai:443"
-  # Metrics remote write endpoint (host:port) for forwarding operator metrics
-  metricsEndpoint: "metrics.onehouse.ai:443"
   mtls:
     clientCert: ""  # Client certificate (PEM format, will be base64-encoded in K8s secret)
     clientKey: ""   # Client private key (PEM format, will be base64-encoded in K8s secret)
@@ -16,8 +9,10 @@ onehouseConfig:
   imagePullSecrets:
     accessToken: ""
 
-  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
-  authToken: ""
+  quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
+
+  # Enable AI agent plugin for Spark applications
+  enableAIAgent: false
 
 # Quanton Operator configuration
 quantonOperator:
@@ -41,7 +36,7 @@ quantonOperator:
   nodeSelector: {}
     # node-type: "compute"
 
-  image: "dist.onehouse.ai/onehouseai/quanton-controller:1.0.0"
+  image: "dist.onehouse.ai/onehouseai/quanton-controller:2.0.1"
   pullPolicy: IfNotPresent
 
   replicas: 1

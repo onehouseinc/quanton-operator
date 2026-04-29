@@ -40,7 +40,7 @@ spec:
   sparkApplicationSpec:
     type: Python
     mode: cluster
-    image: "dist.onehouse.ai/onehouseai/quanton-spark:release-v1.29.0-al2023"
+    image: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
     imagePullPolicy: IfNotPresent
     mainApplicationFile: "local:///mnt/scripts/pyspark-py312-smoke-test.py"
     sparkVersion: "3.5.0"

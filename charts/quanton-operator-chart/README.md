@@ -6,7 +6,7 @@ Helm chart for deploying the Quanton Operator on Kubernetes.
 
 - Kubernetes >= 1.28
 - Helm >= 3.x
-- [Spark Operator](https://github.com/kubeflow/spark-operator) (v1.x or v2.x) installed on the cluster
+- [Spark Operator](https://github.com/kubeflow/spark-operator) 2.x.x or later installed on the cluster
 - An `onehouse-values.yaml` file from your [Onehouse account](https://www.onehouse.ai)
 
 ## Installation
@@ -34,7 +34,6 @@ helm upgrade --install quanton-operator oci://registry-1.docker.io/onehouseai/qu
 
 ```bash
 kubectl get pods -n quanton-operator
-kubectl get secret onehouse-token -n quanton-operator
 ```
 
 ## Upgrading
@@ -64,12 +63,12 @@ Key parameters:
 
 | Parameter | Description | Default |
 |---|---|---|
-| `onehouseConfig.projectId` | Onehouse project ID | `""` |
-| `onehouseConfig.linkId` | Cluster link ID | `""` |
-| `onehouseConfig.authToken` | JWT authentication token | `""` |
+| `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
+| `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
+| `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `false` |
 | `quantonOperator.jobNamespaces` | Namespaces where Spark jobs run | `["default"]` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
-| `quantonOperator.image` | Operator container image | `onehouseai/quanton-controller:1.0.0` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.0` |
 
 ## Chart Components
 
@@ -82,7 +81,7 @@ The chart deploys the following resources:
 | ClusterRole / ClusterRoleBinding | Permissions for managing CRDs, pods, secrets, and leases |
 | Service (`quanton-operator`) | ClusterIP service exposing metrics (`:8080`) and health (`:8081`) endpoints |
 | CRD (`QuantonSparkApplication`) | Custom resource definition for submitting Quanton Spark jobs |
-| Secrets | JWT token, mTLS certificates, and Docker registry credentials |
+| Secrets | mTLS certificates and Docker registry credentials |
 
 ## Health Checks
 

@@ -12,7 +12,9 @@ data:
       "quantonSparkImage": {{ .Values.onehouseConfig.quantonSparkImage | quote }},
       "appsNamespace": {{ if .Values.quantonOperator.jobNamespaces }}{{ .Values.quantonOperator.jobNamespaces | join "," | quote }}{{ else }}""{{ end }},
       "otelServiceName": "quanton-operator",
-      "onehouseProjectId": {{ .Values.onehouseConfig.projectId | quote }},
-      "onehouseLinkId": {{ .Values.onehouseConfig.linkId | quote }},
-      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }}
+      "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
+      "mtlsCertPath": "/etc/mtls/client-cert.pem",
+      "mtlsKeyPath": "/etc/mtls/client-key.pem",
+      "helmChartVersion": {{ .Chart.Version | quote }},
+      "enableAIAgent": {{ .Values.onehouseConfig.enableAIAgent }}
     }

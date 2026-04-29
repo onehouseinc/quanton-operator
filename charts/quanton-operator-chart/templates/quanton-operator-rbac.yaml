@@ -78,16 +78,31 @@ rules:
   - update
   - watch
 
+{{- if not .Values.quantonOperator.jobNamespaces }}
+# Broad secret management - no jobNamespaces specified, grant cluster-wide access
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- else }}
 # Scoped secret management - restricted to operator-managed secrets only
-# Operator needs to read/update these secrets for JWT token refresh and image pull credentials
+# Operator needs to read/update these secrets for image pull credentials and mTLS
 - apiGroups:
   - ""
   resources:
   - secrets
   resourceNames:
-  - onehouse-token
-  - onehouse-docker-registry-secret
-  - mutual-tls-secret
+  - quanton-operator-docker-secret
+  - quanton-operator-mtls-secret
+  - quanton-operator-cert
   verbs:
   - get
   - update
@@ -101,6 +116,14 @@ rules:
   - create
   - list
   - watch
+{{- end }}
+
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
 
 - apiGroups:
   - ""
@@ -136,7 +159,6 @@ rules:
 
 # Deployment permissions for Informer cache sync (cluster-wide)
 # Controller-runtime Informer needs list/watch at cluster scope to manage the client cache
-# RestartDPProxyPod uses client.Get which relies on the Informer cache being synced
 - apiGroups:
   - apps
   resources:
@@ -179,7 +201,7 @@ metadata:
     app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 rules:
 # Deployment permissions for pod restart on certificate refresh (namespace-scoped)
-# RestartDPProxyPod updates deployment with restart annotation when mTLS cert is refreshed
+# Operator restarts deployment with restart annotation when mTLS cert is refreshed
 # Restricted to quanton-operator namespace only
 - apiGroups:
   - apps
@@ -211,3 +233,47 @@ subjects:
 - kind: ServiceAccount
   name: {{ .Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
   namespace: {{ .Release.Namespace }}
+
+{{- range .Values.quantonOperator.jobNamespaces }}
+---
+# Per-namespace secret management for job namespace: {{ . }}
+# Grants get/update/patch/delete on secrets for per-job token lifecycle and secret syncing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $.Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-secret-manager
+  namespace: {{ . }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ $.Chart.AppVersion | quote }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - delete
+  - get
+  - patch
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $.Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-secret-manager
+  namespace: {{ . }}
+  labels:
+    app.kubernetes.io/name: onehouse-quanton-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/version: {{ $.Chart.AppVersion | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $.Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}-secret-manager
+subjects:
+- kind: ServiceAccount
+  name: {{ $.Values.quantonOperator.serviceAccount.name | default "quanton-operator" }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}

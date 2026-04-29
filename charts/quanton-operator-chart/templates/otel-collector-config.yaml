@@ -1,4 +1,3 @@
-{{- /* OTEL Collector config (always created) */}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,20 +9,7 @@ metadata:
     app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 data:
   config.yaml: |
-    # OpenTelemetry Collector Configuration for Quanton Operator
-    # This configuration exports metrics and traces to Onehouse Control Plane
-
     receivers:
-      # Prometheus receiver for metrics from the operator
-      prometheus:
-        config:
-          scrape_configs:
-            - job_name: 'quanton-operator'
-              scrape_interval: 15s
-              static_configs:
-                - targets: ['localhost:8080']
-
-      # OTLP receiver for traces and metrics from applications
       otlp:
         protocols:
           grpc:
@@ -31,13 +17,7 @@ data:
           http:
             endpoint: 0.0.0.0:4318
 
-      # Prometheus receiver scraping the kube-state-metrics sidecar for pod billing metrics every 60s.
-      # Metrics collected:
-      #   kube_pod_labels                        - all pod labels (used to filter oh-quanton=true pods)
-      #   kube_pod_container_resource_requests   - CPU/memory requests per container
-      #   kube_pod_container_resource_limits     - CPU/memory limits per container
-      #   kube_pod_status_phase                  - pod phase (Running/Pending/Failed/Succeeded/Unknown)
-      prometheus/billing:
+      prometheus/ksm:
         config:
           scrape_configs:
             - job_name: 'kube-state-metrics'
@@ -46,53 +26,16 @@ data:
                 - targets: ['localhost:8082']
 
     processors:
-      # Batch processor for efficient batching
       batch:
         send_batch_size: 100
         timeout: 10s
 
-      # Attributes processor to add resource attributes
-      attributes:
-        actions:
-          - key: service.name
-            value: quanton-operator
-            action: insert
-          - key: cluster.name
-            value: {{ .Release.Namespace }}
-            action: insert
-
-      # Resource processor to add source label to all forwarded metrics
-      resource/source:
-        attributes:
-          - key: source
-            value: "quanton-operator"
-            action: upsert
-          - key: projectId
-            value: {{ .Values.onehouseConfig.projectId | quote }}
-            action: upsert
-          - key: linkId
-            value: {{ .Values.onehouseConfig.linkId | quote }}
-            action: upsert
-
-      # Memory limiter to prevent OOM
       memory_limiter:
         check_interval: 1s
         limit_mib: 256
         spike_limit_mib: 128
 
-      # Resource detection
-      resourcedetection/env:
-        detectors: [env, system]
-        timeout: 2s
-
-      # ── Billing pipeline processors ──────────────────────────────────────
-      # Output: OTLP gRPC → operator port 4320 (billingserver)
-      # The operator converts the OTLP payload to ControlPlaneSyncRequest{billing:...}
-      # and calls OrgManagementService/ControlPlaneSync via dp-proxy.
-
-      # Drop pods not in the configured job namespaces (when namespace-restricted mode is active).
-      # kube-state-metrics exposes namespace as a datapoint label (metric attribute).
-      filter/billing:
+      filter/ksm:
         error_mode: ignore
         metrics:
           datapoint:
@@ -103,47 +46,17 @@ data:
             {{- end }}
             - 'not ({{ join " or " $nsParts }})'
             {{- end }}
-            # kube_pod_status_phase emits one datapoint per (pod, phase) with value 1 for the
-            # active phase and 0 for all others. Drop the inactive (zero-valued) datapoints.
             - 'metric.name == "kube_pod_status_phase" and value_double == 0'
 
     exporters:
-      # File exporter to persist metrics to disk
-      file:
-        path: "/var/log/otel-metrics/metrics.json"
-        format: "json"
-        rotation:
-          max_megabytes: 100
-          max_days: 7
-          max_backups: 5
-
-      # Debug exporter for debugging (optional)
-      debug:
-        verbosity: detailed
-
-      # Prometheus remote write exporter to forward metrics via dp-proxy to metrics endpoint
-      {{- if .Values.onehouseConfig.metricsEndpoint }}
-      prometheusremotewrite/dp:
-        endpoint: "http://localhost:8093/api/v1/write"
-        tls:
-          insecure: true
-        resource_to_telemetry_conversion:
-          enabled: true
-      {{- end }}
-
-      # OTLP gRPC exporter to the operator's billing gRPC server (port 4320).
-      # The operator converts OTLP to ControlPlaneSyncRequest{billing:...} and
-      # calls OrgManagementService/ControlPlaneSync via dp-proxy.
-      # Metrics are persisted to disk via file_storage/billing so they survive
-      # network failures and are retried automatically when connectivity is restored.
-      otlp/billing:
+      otlp/operator:
         endpoint: localhost:4320
         tls:
           insecure: true
         compression: none
         sending_queue:
           enabled: true
-          storage: file_storage/billing
+          storage: file_storage/queue
           num_consumers: 1
           queue_size: 5000
         retry_on_failure:
@@ -156,28 +69,14 @@ data:
       health_check:
         endpoint: :13133
 
-      # Persistent storage for the billing queue. Metrics written here survive
-      # network failures and are retried when the connection to port 4320 is restored.
-      file_storage/billing:
-        directory: /var/log/otel-billing-queue
+      file_storage/queue:
+        directory: /var/log/otel-queue
         timeout: 10s
 
     service:
-      extensions: [health_check, file_storage/billing]
+      extensions: [health_check, file_storage/queue]
       pipelines:
-        # Operator self-metrics pipeline
         metrics:
-          receivers: [prometheus, otlp]
-          processors: [memory_limiter, attributes, resource/source, resourcedetection/env, batch]
-          exporters: [file, debug{{ if .Values.onehouseConfig.metricsEndpoint }}, prometheusremotewrite/dp{{ end }}]
-
-        # Traces pipeline
-        traces:
-          receivers: [otlp]
-          processors: [memory_limiter, attributes, resourcedetection/env, batch]
-          exporters: [debug]
-
-        metrics/billing:
-          receivers: [prometheus/billing]
-          processors: [memory_limiter, filter/billing, batch]
-          exporters: [otlp/billing]
+          receivers: [prometheus/ksm]
+          processors: [memory_limiter, filter/ksm, batch]
+          exporters: [otlp/operator]

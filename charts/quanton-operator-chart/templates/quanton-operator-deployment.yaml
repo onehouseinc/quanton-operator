@@ -31,7 +31,7 @@ spec:
 
       {{- if .Values.onehouseConfig.imagePullSecrets.accessToken }}
       imagePullSecrets:
-        - name: onehouse-docker-registry-secret
+        - name: quanton-operator-docker-secret
       {{- end }}
 
       # Security context to allow OTEL collector (UID 10001) to write to metrics-storage volume
@@ -71,8 +71,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
 
-        # Operator namespace (used for JWT token manager initialization)
-        # This is where the operator's JWT token secret is stored
+        # Operator namespace
         - name: OPERATOR_NAMESPACE
           valueFrom:
             fieldRef:
@@ -89,15 +88,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-
-        # JWT Token for Control Plane auth (if configured)
-        {{- if .Values.onehouseConfig.authToken }}
-        - name: ONEHOUSE_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: onehouse-token
-              key: JWT_TOKEN
-        {{- end }}
 
         # Path to operator config file (mounted from ConfigMap)
         - name: OPERATOR_CONFIG_PATH
@@ -140,7 +130,9 @@ spec:
         - name: operator-config
           mountPath: /etc/quanton-operator
           readOnly: true
-
+        - name: mtls-certs
+          mountPath: /etc/mtls
+          readOnly: true
       # OTel Collector sidecar (for metrics/telemetry export)
       # Always enabled - degrades gracefully if export endpoint unreachable
       - name: otel-collector
@@ -187,11 +179,11 @@ spec:
           readOnly: true
         - name: metrics-storage
           mountPath: /var/log/otel-metrics
-        - name: billing-queue-storage
-          mountPath: /var/log/otel-billing-queue
+        - name: otel-queue-storage
+          mountPath: /var/log/otel-queue
 
-      # kube-state-metrics sidecar: exposes kube_pod_labels Prometheus metric with all pod labels.
-      # Scoped to job namespaces only. OTEL prometheus/billing receiver scrapes localhost:8082.
+      # kube-state-metrics sidecar: exposes pod resource metrics.
+      # Scoped to job namespaces only. OTEL prometheus/ksm receiver scrapes localhost:8082.
       - name: kube-state-metrics
         image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.14.0
         imagePullPolicy: IfNotPresent
@@ -229,8 +221,12 @@ spec:
           defaultMode: 0644
       - name: metrics-storage
         emptyDir: {}
-      - name: billing-queue-storage
+      - name: otel-queue-storage
         emptyDir: {}
+      - name: mtls-certs
+        secret:
+          secretName: quanton-operator-mtls-secret
+          defaultMode: 0400
 
       {{- with .Values.quantonOperator.nodeSelector }}
       nodeSelector:
