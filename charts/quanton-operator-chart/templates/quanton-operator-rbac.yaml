@@ -159,7 +159,6 @@ rules:
 
 # Deployment permissions for Informer cache sync (cluster-wide)
 # Controller-runtime Informer needs list/watch at cluster scope to manage the client cache
-# RestartDPProxyPod uses client.Get which relies on the Informer cache being synced
 - apiGroups:
   - apps
   resources:
@@ -202,7 +201,7 @@ metadata:
     app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 rules:
 # Deployment permissions for pod restart on certificate refresh (namespace-scoped)
-# RestartDPProxyPod updates deployment with restart annotation when mTLS cert is refreshed
+# Operator restarts deployment with restart annotation when mTLS cert is refreshed
 # Restricted to quanton-operator namespace only
 - apiGroups:
   - apps

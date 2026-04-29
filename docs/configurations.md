@@ -30,7 +30,7 @@ These values control the behavior and resource allocation of the Quanton Operato
 
 | Parameter | Description | Default |
 |---|---|---|
-| `quantonOperator.image` | Operator container image | `onehouseai/quanton-controller:2.0.0` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.0` |
 | `quantonOperator.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
 | `quantonOperator.serviceAccount.name` | Service account name for the operator | `quanton-operator` |

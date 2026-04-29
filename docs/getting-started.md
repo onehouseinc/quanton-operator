@@ -40,6 +40,7 @@ helm repo update
 helm install spark-operator spark-operator/spark-operator \
   --namespace spark-operator \
   --create-namespace \
+  --version 2.5.0 \
   --set "spark.jobNamespaces={default}"
 ```
 

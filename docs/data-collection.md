@@ -2,9 +2,9 @@
 
 1. The operator sends your entire QuantonSparkApplication yaml to the Onehouse control plane for ease of use and debugging. However, it makes sure that sensitive parameters are masked before sending. Checkout `Spark Parameter Masking` in [configurations](/docs/configurations.md) for more information and controls.
 
-2. The operator collects operational metrics to monitor operator health. Metrics are collected using [OpenTelemetry](https://opentelemetry.io/) and forwarded to the Onehouse control plane. More information about this metrics is available [here](/docs/metrics.md)
+2. The operator collects operational metrics to monitor operator health. Metrics are collected using [OpenTelemetry](https://opentelemetry.io/) and forwarded to the Onehouse control plane. More information about these metrics is available [here](/docs/metrics.md)
 
-3. The operator also collects resource usage metrics to know track how much CPU is used to run drivers/executors spawned by QuantonSparkApplications. More information about this metrics is available [here](/docs/metrics.md)
+3. The operator also collects resource usage metrics to track how much CPU is used to run drivers/executors spawned by QuantonSparkApplications. More information about these metrics is available [here](/docs/metrics.md)
 
 4. AI Agent: No usage data is collected for the Spark AI agent. The AI agent runs entirely within your Kubernetes cluster. For more information about the AI agent, visit [Quanton AI Agent documentation](https://quanton.dev/docs/agent-ai/).
 
