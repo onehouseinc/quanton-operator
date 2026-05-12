@@ -1,0 +1,180 @@
+# Quanton Iceberg clustering demo
+#
+# Writes 100 rows with a complex (Struct / Array / Map) schema to an Iceberg
+# table laid out as many small files (via 20 sequential INSERT batches), then
+# runs rewrite_data_files(strategy='sort') with sort-by columns. Asserts the
+# file count decreased after clustering.
+#
+# Sets spark.quanton.clustering.accelerate=true so the sort inside the
+# rewrite_data_files procedure runs through Quanton-native execution.
+#
+# The iceberg jars (iceberg-spark-runtime, iceberg-aws-bundle,
+# iceberg-spark-quanton) are pre-bundled in the Quanton image at
+# /opt/spark/user-jars/; we put them on the classpath via
+# spark.{driver,executor}.extraClassPath rather than spark.jars.packages,
+# which would pull a maven copy with mismatched shaded-parquet classes and
+# break with a ClassCastException.
+#
+# The script source is also available at examples/iceberg_clustering_demo.py.
+#
+# Usage:
+#   kubectl apply -f examples/quanton-iceberg-clustering-demo.yaml
+#   kubectl logs -f quanton-iceberg-clustering-demo-driver
+#
+# Cleanup:
+#   kubectl delete -f examples/quanton-iceberg-clustering-demo.yaml
+#   kubectl delete pvc quanton-iceberg-clustering-demo-pvc
+#
+# Requires:
+#   - Quanton Operator installed (see README)
+#
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quanton-iceberg-clustering-demo-script
+  namespace: default
+data:
+  iceberg_clustering_demo.py: |
+    """iceberg_clustering_demo.py — Iceberg clustering demo (see examples/iceberg_clustering_demo.py)."""
+    import sys
+
+    from pyspark.sql import SparkSession
+    from pyspark.sql import functions as F
+
+    SORT_ORDER = "region ASC NULLS LAST, ts ASC NULLS LAST"
+    ROWS_PER_BATCH = 5
+    BATCHES = 20
+    EVENT_TYPES = [f"event_{i:02d}" for i in range(8)]
+    REGIONS = ["us-east-1", "us-west-2", "eu-west-1", "ap-south-1"]
+
+    def file_count(spark, table):
+        return int(spark.sql(f"SELECT count(*) AS c FROM {table}.files").collect()[0]["c"])
+
+    warehouse = sys.argv[1].rstrip("/")
+    table = "default.events_iceberg"
+
+    spark = (SparkSession.builder
+             .appName("IcebergClusteringDemo")
+             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+             .config("spark.sql.catalog.spark_catalog", "org.apache.iceberg.spark.SparkSessionCatalog")
+             .config("spark.sql.catalog.spark_catalog.type", "hadoop")
+             .config("spark.sql.catalog.spark_catalog.warehouse", warehouse)
+             .getOrCreate())
+    spark.sparkContext.setLogLevel("WARN")
+
+    print(f"[iceberg-clustering] Creating {table} in {warehouse}")
+    spark.sql(f"DROP TABLE IF EXISTS {table}")
+    spark.sql(f"""
+      CREATE TABLE {table} (
+        id BIGINT, ts TIMESTAMP, region STRING, customer_id STRING,
+        amount DECIMAL(15,2), event_type STRING,
+        address STRUCT<street: STRING, city: STRING, zip: STRING>,
+        tags ARRAY<STRING>,
+        attributes MAP<STRING, STRING>
+      )
+      USING iceberg
+      TBLPROPERTIES ('write.parquet.compression-codec' = 'zstd')
+    """)
+
+    for b in range(BATCHES):
+        batch = (spark.range(b * ROWS_PER_BATCH, (b + 1) * ROWS_PER_BATCH)
+                 .withColumn("ts", F.expr("from_unixtime(unix_timestamp(current_timestamp()) - cast(rand(42) * 86400 * 90 as bigint))").cast("timestamp"))
+                 .withColumn("region", F.element_at(F.array(*[F.lit(r) for r in REGIONS]),
+                                                    (F.col("id") % len(REGIONS) + 1).cast("int")))
+                 .withColumn("customer_id", F.concat(F.lit("cust-"), F.lpad((F.col("id") % 50).cast("string"), 4, "0")))
+                 .withColumn("amount", (F.rand(7) * 1000.0).cast("decimal(15,2)"))
+                 .withColumn("event_type", F.element_at(F.array(*[F.lit(e) for e in EVENT_TYPES]),
+                                                        (F.col("id") % len(EVENT_TYPES) + 1).cast("int")))
+                 .withColumn("address", F.struct(
+                     F.concat(F.lit("street-"), (F.col("id") % 99).cast("string")).alias("street"),
+                     F.concat(F.lit("city-"), (F.col("id") % 20).cast("string")).alias("city"),
+                     F.lpad((F.col("id") % 99999).cast("string"), 5, "0").alias("zip"),
+                 ))
+                 .withColumn("tags", F.array(F.concat(F.lit("tag-"), (F.col("id") % 5).cast("string")),
+                                             F.concat(F.lit("tag-"), (F.col("id") % 7).cast("string"))))
+                 .withColumn("attributes", F.map_from_arrays(
+                     F.array(F.lit("k1"), F.lit("k2")),
+                     F.array(F.concat(F.lit("v-"), (F.col("id") % 3).cast("string")),
+                             F.concat(F.lit("v-"), (F.col("id") % 5).cast("string"))))))
+        batch.writeTo(table).append()
+
+    files_before = file_count(spark, table)
+    rows_before = int(spark.sql(f"SELECT count(*) AS c FROM {table}").collect()[0]["c"])
+    print(f"[iceberg-clustering] Wrote {rows_before} rows across {files_before} data files")
+
+    print(f"[iceberg-clustering] CALL rewrite_data_files(strategy='sort', sort_order='{SORT_ORDER}')")
+    spark.sql(f"CALL spark_catalog.system.rewrite_data_files(table => '{table}', strategy => 'sort', sort_order => '{SORT_ORDER}')").collect()
+    files_after = file_count(spark, table)
+
+    print(f"[iceberg-clustering] Files: {files_before} -> {files_after}")
+    assert files_after < files_before, f"Expected file count to decrease ({files_before} -> {files_after})"
+    rows = int(spark.sql(f"SELECT count(*) AS c FROM {table}").collect()[0]["c"])
+    assert rows == rows_before, f"Row count changed: {rows_before} -> {rows}"
+    print(f"[iceberg-clustering] PASS — {rows} rows preserved, files compacted {files_before} -> {files_after}")
+    spark.stop()
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: quanton-iceberg-clustering-demo-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: quantonsparkoperator.onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: quanton-iceberg-clustering-demo
+  namespace: default
+spec:
+  sparkApplicationSpec:
+    type: Python
+    mode: cluster
+    image: "apache/spark:3.5.0"
+    imagePullPolicy: IfNotPresent
+    mainApplicationFile: "local:///mnt/scripts/iceberg_clustering_demo.py"
+    arguments:
+      - "/data/iceberg-clustering-demo"
+    sparkVersion: "3.5.0"
+    restartPolicy:
+      type: Never
+    sparkConf:
+      # Bundled iceberg jars on the Quanton image — see header comment.
+      spark.driver.extraClassPath: "/opt/spark/user-jars/iceberg-spark-runtime.jar:/opt/spark/user-jars/iceberg-aws-bundle.jar:/opt/spark/user-jars/iceberg-spark-quanton.jar"
+      spark.executor.extraClassPath: "/opt/spark/user-jars/iceberg-spark-runtime.jar:/opt/spark/user-jars/iceberg-aws-bundle.jar:/opt/spark/user-jars/iceberg-spark-quanton.jar"
+      spark.jars.ivy: "/tmp/ivy"
+      spark.quanton.clustering.accelerate: "true"
+    volumes:
+      - name: scripts
+        configMap:
+          name: quanton-iceberg-clustering-demo-script
+      - name: iceberg-output
+        persistentVolumeClaim:
+          claimName: quanton-iceberg-clustering-demo-pvc
+    driver:
+      cores: 1
+      memory: "2048m"
+      labels:
+        version: "3.5.0"
+      serviceAccount: spark-operator-spark
+      volumeMounts:
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: iceberg-output
+          mountPath: /data/iceberg-clustering-demo
+    executor:
+      cores: 1
+      instances: 1
+      memory: "2048m"
+      labels:
+        version: "3.5.0"
+      volumeMounts:
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: iceberg-output
+          mountPath: /data/iceberg-clustering-demo
