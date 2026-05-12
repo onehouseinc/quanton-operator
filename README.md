@@ -110,7 +110,7 @@ The tool validates the input and rewrites `apiVersion`, `kind`, and nests `spec`
 
 ## Claude Code
 
-If you have [Claude Code](https://claude.com/claude-code) installed, you can set up and demo Quanton interactively from the terminal. The repo ships with two skills (slash commands) that automate the full setup and benchmarking workflow.
+If you have [Claude Code](https://claude.com/claude-code) installed, you can set up and demo Quanton interactively from the terminal. The repo ships with [skills](.claude/skills/) (slash commands) that automate the full setup, demo, benchmarking, and teardown workflows.
 
 Start Claude Code in the repo root:
 
@@ -118,16 +118,18 @@ Start Claude Code in the repo root:
 claude
 ```
 
-Then use either skill:
+Then use any of the skills:
 
 
-| Skill                    | What it does                                                                                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                    |
-| `/run-tpcds-benchmark`   | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. |
+| Skill                    | What it does                                                                                                                                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                                                          |
+| `/run-tpcds-benchmark`   | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart.                                       |
+| `/run-clustering`        | Runs the Hudi or Iceberg clustering demo on minikube — writes a table with a complex (Struct/Array/Map/nested) schema, forces a many-tiny-files layout, then triggers the format's native clustering procedure with `spark.quanton.clustering.accelerate=true` and verifies it succeeded. |
+| `/clean-uninstall`       | Fully removes the Quanton Operator Helm release, cleans up secrets it created across namespaces, and removes the CRD.                                                                                                                                       |
 
 
-Both skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://cloud.onehouse.ai)) to install the Quanton Operator.
+All skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://cloud.onehouse.ai)) to install the Quanton Operator.
 
 ## Benchmarks
 
