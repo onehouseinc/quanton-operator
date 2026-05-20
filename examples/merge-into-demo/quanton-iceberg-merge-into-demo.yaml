@@ -115,7 +115,22 @@ data:
 
     assert rows_after == 13, f"Expected 13 rows after merge, got {rows_after}"
     assert vip_count == 3,   f"Expected 3 vip rows after merge, got {vip_count}"
-    print(f"[iceberg-merge] PASS — {rows_before} -> {rows_after} rows, 3 updated to 'vip'")
+
+    # Verify the Quanton-native columnar MERGE writer was used: it produces
+    # parquet files named "onehouse-rewriter-*.parquet". Vanilla iceberg uses
+    # a different pattern ("<stage>-<task>-<uuid>-...parquet").
+    import os
+    data_dir = f"{warehouse}/default/customers/data"
+    files = sorted(os.listdir(data_dir)) if os.path.isdir(data_dir) else []
+    rewriter_files = [f for f in files if f.startswith("onehouse-rewriter-") and f.endswith(".parquet")]
+    print(f"[iceberg-merge] onehouse-rewriter parquet files: {rewriter_files}")
+    assert len(rewriter_files) >= 1, (
+        f"Expected at least one onehouse-rewriter-*.parquet file from the MERGE; "
+        f"found files in {data_dir}: {files}"
+    )
+
+    print(f"[iceberg-merge] PASS — {rows_before} -> {rows_after} rows, 3 updated to 'vip', "
+          f"{len(rewriter_files)} onehouse-rewriter parquet file(s)")
     spark.stop()
 ---
 apiVersion: v1

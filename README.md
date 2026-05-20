@@ -126,6 +126,7 @@ Then use any of the skills:
 | `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                                                          |
 | `/run-tpcds-benchmark`   | Runs the TPC-DS read benchmark (99 queries on Parquet) comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart.                                       |
 | `/run-clustering`        | Runs the Hudi or Iceberg clustering demo on minikube — writes a table with a complex (Struct/Array/Map/nested) schema, forces a many-tiny-files layout, then triggers the format's native clustering procedure with `spark.quanton.clustering.accelerate=true` and verifies it succeeded. |
+| `/run-merge-into`        | Runs the Hudi or Iceberg `MERGE INTO` demo on minikube — creates a `customers` table, inserts 10 rows, runs `MERGE INTO` with 3 updates + 3 inserts, and verifies the final state (`10 -> 13 rows, 3 'vip'`).                                                |
 | `/clean-uninstall`       | Fully removes the Quanton Operator Helm release, cleans up secrets it created across namespaces, and removes the CRD.                                                                                                                                       |
 
 
