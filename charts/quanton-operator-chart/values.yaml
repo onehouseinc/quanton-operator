@@ -11,6 +11,12 @@ onehouseConfig:
 
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
 
+  # OSS engine images, selected per-job via the spark.quanton.accelerator SparkConf.
+  # Leave empty to fall back to quantonSparkImage (native) when the accelerator is set
+  # to gluten/comet but no image is published yet.
+  quantonOperatorOpenSourceGlutenImage: ""
+  quantonOperatorOpenSourceCometImage: ""
+
   # Enable AI agent plugin for Spark applications
   enableAIAgent: true
 
