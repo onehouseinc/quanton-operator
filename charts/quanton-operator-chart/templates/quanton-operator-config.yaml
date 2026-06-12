@@ -10,6 +10,8 @@ data:
   config.json: |
     {
       "quantonSparkImage": {{ .Values.onehouseConfig.quantonSparkImage | quote }},
+      "quantonOperatorOpenSourceGlutenImage": {{ .Values.onehouseConfig.quantonOperatorOpenSourceGlutenImage | default "" | quote }},
+      "quantonOperatorOpenSourceCometImage": {{ .Values.onehouseConfig.quantonOperatorOpenSourceCometImage | default "" | quote }},
       "appsNamespace": {{ if .Values.quantonOperator.jobNamespaces }}{{ .Values.quantonOperator.jobNamespaces | join "," | quote }}{{ else }}""{{ end }},
       "otelServiceName": "quanton-operator",
       "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},
