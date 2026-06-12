@@ -11,9 +11,10 @@ onehouseConfig:
 
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
 
-  # OSS engine images, selected per-job via the spark.quanton.accelerator SparkConf.
-  # Leave empty to fall back to quantonSparkImage (native) when the accelerator is set
-  # to gluten/comet but no image is published yet.
+  # OSS engine images, selected per-job via the spark.quanton.accelerator SparkConf
+  # (gluten/comet). Leave empty only when that accelerator isn't offered in this deployment:
+  # a job that requests gluten/comet with no image configured FAILS ("image not available")
+  # rather than silently running the native image.
   quantonOperatorOpenSourceGlutenImage: ""
   quantonOperatorOpenSourceCometImage: ""
 
