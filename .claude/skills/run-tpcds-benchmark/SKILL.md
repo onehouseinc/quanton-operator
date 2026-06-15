@@ -1,6 +1,6 @@
 ---
 name: run-tpcds-benchmark
-description: Run the TPC-DS benchmark comparing OSS Apache Spark vs Quanton on Kubernetes, with interactive configuration and live progress updates
+description: Run the TPC-DS benchmark comparing OSS Apache Spark vs Quanton on Kubernetes, with interactive configuration and live progress updates. Optionally enables the in-driver Spark Agent (sidebar with Chat, Recommendations, Diagnostics, Monitor, Cost, SHS cohort) on the Quanton run so the user can interact with it live while the benchmark executes.
 allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion, Write
 ---
 
@@ -87,6 +87,30 @@ Check if Spark Operator and Quanton Operator are installed (`helm list -A`).
 - If either is missing, tell the user what's missing and that they should run `/setup-and-run-example` first, then stop.
 - If both are present, proceed.
 
+### Q6: Spark Agent (optional)
+
+Ask: "Enable the **Spark Agent** during the Quanton run? It's an AI sidebar embedded in the Spark UI itself — five tabs (Chat, Monitor, Diagnostics, **Savings**, Settings). You can ask plain-English questions about your running job, see auto-detected health alerts, and break down compute waste by category. The agent only runs during the Quanton phase — the OSS baseline stays untouched so the comparison stays clean."
+
+- Options: "Yes, enable the agent on the Quanton run" / "No, run benchmark mode only"
+
+Default: No. The agent is optional — turn it on if you want to *see* what Quanton is doing while the benchmark runs.
+
+If yes, ask **two follow-ups** (use `AskUserQuestion`):
+
+**Q6a — keep the sidebar alive past benchmark completion?**
+
+"By default the Spark UI tears down when `SparkContext.stop()` runs (i.e. when the last query finishes). The agent ships a feature — **await-termination** — that keeps the UI usable past job-end so you can come back to a finished run and keep asking questions. A banner appears above the sidebar with a countdown plus two buttons: **Extend** (adds another timeout chunk to the deadline — additive, not reset) and **Allow termination** (release immediately). Default keep-alive timeout is 30 minutes."
+
+- Options: "Yes, keep the sidebar alive for 30 minutes after the benchmark finishes (recommended)" / "No, let the sidebar die at job end"
+
+**Q6b — optional Spark History Server URL**
+
+"If you have a Spark History Server reachable from the driver pod, paste its URL. With this set, the Savings tab moves from `Live only` to `Cohort-grounded` and Chat answers can compare the current run against your historical baseline. The agent matches the current run against prior runs using (in order): your operator-set identity override, the SQL plan, your orchestration metadata (Airflow / dbt / Dagster / K8s labels), and finally the normalised app name. The matched layer is surfaced on the cohort strip so you can see why a cohort matched."
+
+- Free-text URL or blank for live-only mode.
+
+Remember all three choices. They change the Phase 4 manifest patching and the walkthrough in Phase 4.5.
+
 ## Phase 1: Setup (PVC, ConfigMaps, Docker Image)
 
 Tell the user: "Setting up the benchmark infrastructure..."
@@ -166,11 +190,94 @@ Tell the user: "Now running the same 99 TPC-DS queries on Quanton. This is where
 
 1. Clean up: `kubectl delete quantonsparkapplication quanton-tpcds-parquet --ignore-not-found=true`
 2. Apply the Quanton manifest with scale-factor patching.
+   - **If the user enabled the Spark Agent in Q6**: inject `sparkConf` keys into the patched manifest before applying. The Quanton manifest already has a `sparkConf:` block (or add one if missing) — append the two mandatory keys, plus the await-termination key if Q6a=yes:
+     ```yaml
+     spark.plugins: "ai.quanton.spark.agent.SparkAgentPlugin"
+     spark.quanton.agent.enabled: "true"
+     # Only if Q6a=yes:
+     spark.quanton.agent.await.termination: "true"
+     # Default timeout is 30m; override here if user wants a different value:
+     # spark.quanton.agent.await.termination.timeout: "1h"
+     ```
+     Patch in Python alongside the existing scale-factor / executor patches. Example:
+     ```python
+     import re
+     agent_lines = ['      spark.plugins: "ai.quanton.spark.agent.SparkAgentPlugin"',
+                    '      spark.quanton.agent.enabled: "true"']
+     if await_termination:
+         agent_lines.append('      spark.quanton.agent.await.termination: "true"')
+     injection = '\\1' + '\\n'.join(agent_lines) + '\\n'
+     if 'sparkConf:' in content:
+         content = re.sub(r'(sparkConf:\n)', injection, content, count=1)
+     # If the operator was installed with enableAIAgent=true these are
+     # injected by the controller automatically — leaving them in the
+     # manifest is harmless (same value).
+     ```
+     If `--set onehouseConfig.enableAIAgent=true` was used at install time, mention to the user that they didn't strictly need to pass them, but it's a no-op.
 3. `kubectl apply -f` the patched manifest.
 4. **Live progress updates every 30-60 seconds** (same as Phase 3):
    - Once the driver pod is Running, tail logs. The Quanton driver pod name follows the pattern `quanton-tpcds-parquet-spark-app-driver` (the operator appends `-spark-app`).
    - Count completed queries and tell the user progress.
    - Tell the user: "Quanton: 67/99 queries complete. Running q68... Notice this is faster than the OSS baseline!"
+
+### Phase 4.5: Agent walkthrough (only if Q6 enabled)
+
+As soon as the Quanton driver pod is `Running` (before the benchmark finishes), offer to port-forward the Spark UI so the user can interact with the agent while the queries execute.
+
+```bash
+# Spawn in the background so the benchmark loop keeps going.
+kubectl port-forward quanton-tpcds-parquet-spark-app-driver 4040:4040 -n default &
+```
+
+The Spark UI is now at <http://localhost:4040>. The agent sidebar toggle appears in the bottom-right corner.
+
+#### Why this is useful (the 30-second pitch)
+
+Before walking through the tabs, give the user the value pitch:
+
+- **Plain-English questions about your live job.** "What's the slowest stage right now?" / "Any data skew?" / "What's wasting the most compute?" — the agent has live access to every stage, executor, and SQL plan in your driver.
+- **Your API key stays in your browser.** It travels straight to your chosen LLM provider; it does not pass through the driver JVM and there is no Onehouse-hosted server in the request path.
+- **Cost in percentages, never dollars.** Pricing varies 3–4× across spot / reserved / cloud / region; the agent shows you waste, not a fictional dollar figure.
+- **Answers cite public docs.** Every claim about Spark behaviour resolves to a public URL.
+
+#### The five tabs (toolbar order, top to bottom)
+
+| Tab | What it shows | What to look for |
+|---|---|---|
+| **Chat** | Streaming conversation grounded in live driver state. `@`-mention typeahead for stages / executors / jobs; `/`-slash skill picker. When a Spark History Server is configured, a **cohort strip** above the messages shows the matched prior runs and which identity layer matched (operator override, SQL plan, orchestration metadata, or normalised app name). | Citations link to public docs or carry a history tag with the matched app-id range and metric. Streaming is per-token; tool calls render as collapsible blocks. |
+| **Monitor** | Live executor + stage + GC + shuffle metrics. Refreshes every ~2 s while visible; pauses when hidden. | Counts should match the native Spark UI. |
+| **Diagnostics** | Auto-detected health alerts — spill, GC pressure, skew, straggler, OOM, failed tasks, shuffle explosion, small / large partitions, record skew, fetch-wait, executor churn. Each alert has an **Ask Agent** button that jumps into Chat with the alert payload pre-loaded. | A red dot on the Diagnostics toolbar icon means at least one CRITICAL alert is firing — visible even with the sidebar collapsed. |
+| **Savings** (icon: `$` — universally recognised shorthand for compute waste; the *contents* are percentages, never USD) | Compute-waste breakdown across documented categories — idle executors, straggler tax, GC overhead, spill, retry overhead, failed-task overhead, skew, speculative waste, over-provisioning, dynamic-allocation churn. Each finding carries an impact %, severity tier (**critical ≥15 %** / **high 5–15 %** / **medium 3–5 %** / **minor <3 %**), evidence string with the underlying numbers, copy-ready fix, and the tools that produced it. | Headline = `(total − useful) / total`. Sub-threshold findings collapse into a "minor opportunities" tail (threshold configurable via browser localStorage `costMinSignificancePct`, default 3 %). Confidence pill reads `Cohort-grounded` when SHS matched, `Live only` otherwise. Per-category impacts can sum to more than 100 % — that's intentional (overlapping waste); the headline is the source of truth. |
+| **Settings** | LLM provider selector (Anthropic / OpenAI / Gemini, auto-detected from the API-key prefix), API key entry (stored in browser localStorage only), model selector, optional Spark History Server URL. | API key field should mask after blur; switching provider re-fetches the model list. |
+
+#### Await-termination banner (only if Q6a was enabled)
+
+A banner sits above the tab toolbar, persistent across tab switches:
+
+- **Before job-end** — banner says "auto-terminate at job end" plus an **Allow termination** button that disarms the keeper (driver exits normally at job-end).
+- **After job-end, while keep-alive is active** — banner shows a **live countdown** plus two buttons:
+  - **Extend** — adds another timeout chunk to the deadline. **Additive, not reset** — each click pushes the deadline further by the configured timeout. No upper bound.
+  - **Allow termination** — releases immediately; the driver exits.
+
+Every Spark UI page (Jobs, Stages, SQL, Storage, Environment, Executors) keeps rendering its frozen final state for the entire window. This is what makes "go for coffee, come back, ask the agent about the just-finished run" actually work.
+
+#### Suggested prompts (in Chat)
+
+Adapt to the current state of the benchmark:
+
+- During datagen: `What stage is generating the most shuffle right now?`
+- Mid Quanton run: `What's my dominant cost driver right now?` (exercises the Savings surface)
+- After at least one query finishes and a History Server is configured: `Diff this run against the historical median`
+- Anytime: `Anything I should worry about — skew, GC, spill?`
+
+Keep the benchmark progress loop running in parallel. When the user is ready to move on (or the queries finish), kill the port-forward:
+
+```bash
+pkill -f 'port-forward.*quanton-tpcds-parquet'
+```
+
+If Q6a was enabled, the sidebar stays reachable for the configured keep-alive window (default 30 minutes) even after the benchmark loop completes — re-establish the port-forward and explore at leisure.
+
 5. Wait for completion.
 6. Tell the user: "Quanton run complete!"
 

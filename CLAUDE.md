@@ -4,6 +4,8 @@
 
 Quanton Operator is a Kubernetes operator (Helm chart) that extends the Kubeflow Spark Operator to run Apache Spark jobs on the Onehouse Quanton compute engine. It introduces the `QuantonSparkApplication` CRD (`apiVersion: quantonsparkoperator.onehouse.ai/v1beta2`) which wraps a standard `SparkApplication` spec under `spec.sparkApplicationSpec`.
 
+The Quanton image bundles an in-driver AI agent surfaced as a Spark UI sidebar with five tabs (Chat, Monitor, Diagnostics, Savings, Settings). It's opt-in per `QuantonSparkApplication` via two `sparkConf` keys (`spark.plugins=ai.quanton.spark.agent.SparkAgentPlugin` + `spark.quanton.agent.enabled=true`), or auto-injected when the operator is installed with `--set onehouseConfig.enableAIAgent=true`. Optional `spark.quanton.agent.await.termination=true` keeps the Spark UI alive past `sc.stop()` for post-mortem inspection. `examples/tpcds-agent/` is the reference example; `/run-tpcds-benchmark` has an interactive agent-enable mode.
+
 ## Repository Structure
 
 - `charts/quanton-operator-chart/` — Helm chart (Chart v2.0.0, App v1.0.0)
