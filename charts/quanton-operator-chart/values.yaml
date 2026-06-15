@@ -43,7 +43,7 @@ quantonOperator:
   nodeSelector: {}
     # node-type: "compute"
 
-  image: "dist.onehouse.ai/onehouseai/quanton-controller:2.0.1"
+  image: "dist.onehouse.ai/onehouseai/quanton-controller:2.0.3"
   pullPolicy: IfNotPresent
 
   replicas: 1
