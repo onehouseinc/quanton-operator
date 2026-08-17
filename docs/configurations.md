@@ -20,8 +20,14 @@ These values are typically pre-populated in the `onehouse-values.yaml` provided 
 | `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
 | `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
 | `onehouseConfig.imagePullSecrets.accessToken` | Docker registry access token for pulling Onehouse images | `""` |
-| `onehouseConfig.quantonSparkImage` | Quanton Spark runtime image | `dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023` |
+| `onehouseConfig.quantonSparkImage` | Quanton Spark runtime image, Spark 3 line | `dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023` |
+| `onehouseConfig.quantonOperatorOpenSourceGlutenImage` | OSS Gluten image, Spark 3 line | `""` |
+| `onehouseConfig.quantonOperatorOpenSourceCometImage` | OSS Comet image, Spark 3 line | `""` |
+| `onehouseConfig.quantonSpark4Image` | Quanton Spark runtime image, Spark 4 line | `""` |
+| `onehouseConfig.quantonOperatorOpenSourceCometSpark4Image` | OSS Comet image, Spark 4 line | `""` |
 | `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `false` |
+
+See [Engine and Spark Version Selection](#engine-and-spark-version-selection) for how a job picks one of these images.
 
 
 ## Operator Configuration
@@ -107,6 +113,53 @@ quantonOperator:
     team: "data-engineering"
   nodeSelector:
     node-type: "compute"
+```
+
+## Engine and Spark Version Selection
+
+Each job runs on an operator-controlled image. Any `image` you set in the job spec is overridden. The operator picks the image from two fields in the job:
+
+- `spec.sparkApplicationSpec.sparkVersion` — must be `3.5.x` or `4.1.x`. These are the Spark lines Quanton ships an image for.
+- `spark.quanton.accelerator` in `sparkConf` — `native` (the default), `gluten`, or `comet`.
+
+| `sparkVersion` | `spark.quanton.accelerator` | Image value |
+|---|---|---|
+| `3.5.x` | `native` (default) | `onehouseConfig.quantonSparkImage` |
+| `3.5.x` | `gluten` | `onehouseConfig.quantonOperatorOpenSourceGlutenImage` |
+| `3.5.x` | `comet` | `onehouseConfig.quantonOperatorOpenSourceCometImage` |
+| `4.1.x` | `native` (default) | `onehouseConfig.quantonSpark4Image` |
+| `4.1.x` | `comet` | `onehouseConfig.quantonOperatorOpenSourceCometSpark4Image` |
+| `4.1.x` | `gluten` | Unsupported. Gluten has no Spark 4 image. |
+
+Example of a Spark 4 job that runs the OSS Comet engine:
+
+```yaml
+apiVersion: quantonsparkoperator.onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: spark4-comet-example
+spec:
+  sparkApplicationSpec:
+    sparkVersion: "4.1.0"
+    sparkConf:
+      spark.quanton.accelerator: "comet"
+```
+
+Quote the version. An unquoted `sparkVersion: 4.1` is a YAML number, and the job is rejected.
+
+The operator never falls back to another image. A job fails at submission in these cases:
+
+- `sparkVersion` is missing, or names a version outside `3.5.x` and `4.1.x`.
+- The accelerator value is not `native`, `gluten`, or `comet`.
+- The combination does not exist, such as `gluten` on Spark 4.1.
+- The image for that combination is empty, which means Onehouse does not offer that engine in your deployment. Contact Onehouse support.
+
+Each failure is reported on the job. Run `kubectl describe quantonsparkapplication <name>` and read the `SubmissionFailed` event, which names the field to fix:
+
+```
+sparkVersion is required in spec.sparkApplicationSpec: set it to 3.5.x for Spark 3, or 4.1.x for Spark 4
+unsupported sparkVersion "3.4.1": supported versions are 3.5.x (Spark 3) and 4.1.x (Spark 4)
+spark.quanton.accelerator=gluten is not supported on Spark 4.1 (supported on Spark 4.1: native, comet)
 ```
 
 ## PySpark

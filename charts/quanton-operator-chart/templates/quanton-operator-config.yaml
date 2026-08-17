@@ -12,6 +12,8 @@ data:
       "quantonSparkImage": {{ .Values.onehouseConfig.quantonSparkImage | quote }},
       "quantonOperatorOpenSourceGlutenImage": {{ .Values.onehouseConfig.quantonOperatorOpenSourceGlutenImage | default "" | quote }},
       "quantonOperatorOpenSourceCometImage": {{ .Values.onehouseConfig.quantonOperatorOpenSourceCometImage | default "" | quote }},
+      "quantonSpark4Image": {{ .Values.onehouseConfig.quantonSpark4Image | default "" | quote }},
+      "quantonOperatorOpenSourceCometSpark4Image": {{ .Values.onehouseConfig.quantonOperatorOpenSourceCometSpark4Image | default "" | quote }},
       "appsNamespace": {{ if .Values.quantonOperator.jobNamespaces }}{{ .Values.quantonOperator.jobNamespaces | join "," | quote }}{{ else }}""{{ end }},
       "otelServiceName": "quanton-operator",
       "additionalSparkParamsToMask": {{ .Values.quantonOperator.additionalSparkParamsToMask | toJson }},

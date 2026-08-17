@@ -11,12 +11,24 @@ onehouseConfig:
 
   quantonSparkImage: "dist.onehouse.ai/onehouseai/quanton-spark:quanton-operator-release-v0.2.0-al2023"
 
-  # OSS engine images, selected per-job via the spark.quanton.accelerator SparkConf
-  # (gluten/comet). Leave empty only when that accelerator isn't offered in this deployment:
-  # a job that requests gluten/comet with no image configured FAILS ("image not available")
-  # rather than silently running the native image.
+  # Engine images. The operator picks one per job from the job's sparkVersion, which must be
+  # 3.5.x or 4.1.x, and the spark.quanton.accelerator SparkConf:
+  #
+  #   sparkVersion | spark.quanton.accelerator | image value
+  #   -------------+---------------------------+------------------------------------------
+  #   3.5.x        | native (default)          | quantonSparkImage
+  #   3.5.x        | gluten                    | quantonOperatorOpenSourceGlutenImage
+  #   3.5.x        | comet                     | quantonOperatorOpenSourceCometImage
+  #   4.1.x        | native (default)          | quantonSpark4Image
+  #   4.1.x        | comet                     | quantonOperatorOpenSourceCometSpark4Image
+  #   4.1.x        | gluten                    | unsupported: Gluten has no Spark 4 image
+  #
+  # Leave a value empty only when that engine isn't offered in this deployment: a job that requests
+  # it then FAILS ("image not available") rather than silently running a different image.
   quantonOperatorOpenSourceGlutenImage: ""
   quantonOperatorOpenSourceCometImage: ""
+  quantonSpark4Image: ""
+  quantonOperatorOpenSourceCometSpark4Image: ""
 
   # Enable AI agent plugin for Spark applications
   enableAIAgent: true
