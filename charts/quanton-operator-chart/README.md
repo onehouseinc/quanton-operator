@@ -65,10 +65,10 @@ Key parameters:
 |---|---|---|
 | `onehouseConfig.mtls.clientCert` | Client certificate in PEM format for mTLS | `""` |
 | `onehouseConfig.mtls.clientKey` | Client private key in PEM format for mTLS | `""` |
-| `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `false` |
+| `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `true` |
 | `quantonOperator.jobNamespaces` | Namespaces where Spark jobs run | `["default"]` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
-| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.0` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.6` |
 
 ## Chart Components
 
