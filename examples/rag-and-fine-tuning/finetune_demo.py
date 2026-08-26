@@ -13,8 +13,7 @@ span is located inside the parsed chunk that contains it, giving
     -> format("training_dataset")  -> validated Together SFT JSONL + _manifest.json
                                    -> tokenized parquet + token manifest
 
-Nothing is installed: the image ships quanton_llm_training, and its `tokenized` extra is
-transformers + jinja2, which are Rust tokenizers and pull no torch.
+Nothing is installed: the image ships quanton_llm_training.
 
 Usage: finetune_demo.py <data_dir> [max_rows]
 """
@@ -32,9 +31,7 @@ DATA = sys.argv[1] if len(sys.argv) > 1 else "/data/rag-demo"
 MAX_ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 500
 
 TABLES, EXPORTS = f"{DATA}/tables", f"{DATA}/exports"
-# An exported training dataset is immutable, so format("training_dataset") refuses to
-# write into a path that already holds one. A UTC stamp gives each run its own version
-# directory. The Hudi tables are the opposite contract on purpose: they upsert in place.
+# Exported datasets are immutable, so each run writes its own versioned directory.
 VERSION = os.environ.get("QU_EXPORT_VERSION",
                          datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
 
@@ -56,8 +53,6 @@ annotations = (read_hudi("contract_annotations")
                .where(F.length("span") > 40))
 
 # Whitespace-normalised prefix match: find the chunk that contains each expert span.
-# This is the grounding step -- a human lawyer marked the span, so the answer is not
-# something the model invented.
 norm = lambda c: F.lower(F.regexp_replace(c, r"\s+", " "))  # noqa: E731
 positives = (annotations
              .withColumn("span_key", F.substring(norm(F.col("span")), 1, 120))
@@ -118,8 +113,7 @@ tokenized_path = f"{EXPORTS}/cuad-analyst-sft-tokenized/{VERSION}"
       .save(tokenized_path))
 print(f"[finetune-demo] tokenized parquet + manifest -> {tokenized_path}", flush=True)
 
-# The writer produces the dataset in object storage and never uploads. The manifest's
-# `load` section names the command the caller still owes.
+# The writer never uploads. The manifest's `load` section names the upload command.
 for p in (jsonl_path, tokenized_path):
     for m in glob.glob(os.path.join(p, "_manifest.json")):
         print(f"\n[finetune-demo] _manifest.json ({os.path.basename(p)}):", flush=True)

@@ -65,10 +65,8 @@ kubectl get configmap quanton-operator-config -n quanton-operator \
 ```
 
 If `quantonSpark4Image` is missing or empty, stop. The jobs declare
-`sparkVersion: "4.1.0"`, and the operator has no fallback — it fails the submission
-rather than quietly using a Spark 3 image. Tell the user to set
-`onehouseConfig.quantonSpark4Image` in their operator values. Chart 2.0.6 or newer is
-required; older charts have no such key at all.
+`sparkVersion: "4.1.0"`, which requires that image. Tell the user to set
+`onehouseConfig.quantonSpark4Image` in their operator values (chart 2.0.6 or newer).
 
 ## Phase 1: Run
 
@@ -103,7 +101,7 @@ kubectl logs -f quanton-finetune-demo-driver -n default
 For the RAG demo, show the user three things and say what each one demonstrates:
 
 1. **The routing table** — one engine picked a parser per file, and left the CSV to the
-   native readers instead of mangling it through a text extractor.
+   native readers rather than a text extractor.
 2. **The cosine top-5 joined to the expert labels** — how many of the retrieved contracts
    carry the expert `Non-Compete` label. This is the accuracy signal. Do not present a
    high cosine as correctness on its own.
@@ -118,22 +116,17 @@ Both end with a `PASS —` line. Quote it.
 
 ## Troubleshooting
 
-**`NameError: name 'torch' is not defined`** in a `mapInPandas` task. Expected on the
-first attempt if a Python worker imported while the install was still in flight; Spark
-retries and the retry succeeds. If every attempt fails, the `sys.modules` purge in
-`ensure_sentence_transformers()` is not running — check the script in the ConfigMap
-matches `rag_demo.py` on disk.
+**`NameError: name 'torch' is not defined`** in a `mapInPandas` task. A Python worker
+imported `transformers` before the install finished. Spark retries the task and the retry
+succeeds. If every attempt fails, check that the script in the ConfigMap matches
+`rag_demo.py` on disk.
 
 **Driver evicted, `Evicted pod: Underutilized`.** Only on clusters running Karpenter, not
 minikube. Add `spark.kubernetes.driver.annotation.karpenter.sh/do-not-disrupt: "true"`.
 
 **`No object store provider found for scheme: 's3a'`.** You pointed the demo at object
-storage using `s3a://`. Lance's writer is native Rust with its own object-store layer and
-has no `s3a` provider. Use `s3://` and register
-`fs.s3.impl=org.apache.hadoop.fs.s3a.S3AFileSystem`.
-
-**A bare `count()` returns 0** on a lance table. A Hudi 1.2.0 bug with empty-projection
-scans — the data is fine. Aggregate over a named column instead.
+storage using `s3a://`. Lance uses its own object-store layer, which does not recognise
+`s3a`. Use `s3://` and register `fs.s3.impl=org.apache.hadoop.fs.s3a.S3AFileSystem`.
 
 ## Cleanup
 

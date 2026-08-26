@@ -39,31 +39,14 @@ os.environ.setdefault("HF_HOME", f"{DATA}/hf")
 def ensure_sentence_transformers():
     """Install sentence-transformers into PYDEPS once per pod, then import it.
 
-    The image ships quanton_unstructured, Hudi and Lance, but deliberately not
-    sentence-transformers: torch would roughly double the image, and embedding is job
-    code rather than connector code. So the job installs it. Three things this has to
-    get right, all of them learned by getting them wrong first:
+    The image does not bundle sentence-transformers (torch is large and embedding is
+    job code), so the job installs it:
 
-    1. --index-url .../whl/cpu. The default wheel drags in nvidia/ and triton/ -- about
-       3.5 GB of CUDA runtime that never executes on a CPU node. Pinning the CPU build
-       takes the install from ~5.0 GB to ~1.4 GB.
-
-    2. transformers is named explicitly, with --upgrade. The image already ships it (via
-       quanton-llm-training[tokenized]) resolved against NO torch, so a bare
-       `--target PYDEPS sentence-transformers` finds it already satisfied and skips it.
-       That leaves sentence_transformers loading from PYDEPS while transformers loads
-       from the image's site-packages -- a torch-less transformers under a torch that
-       now exists. It then detects torch as available and dies in a class body where
-       torch was never bound: "NameError: name 'torch' is not defined".
-
-    3. A marker file, checked under the lock, plus a sys.modules purge. Every Python
-       worker on an executor calls this and they share one /tmp, so the install must
-       happen once. Testing importability instead of a marker is a time-of-check race:
-       pip writes --target incrementally, so a worker can import a half-written tree.
-       And because Spark reuses Python workers, a worker that imported during that
-       window keeps the image's transformers in sys.modules forever -- when a submodule
-       raises, Python evicts only that submodule and leaves the parent package cached.
-       Purging it is what makes the retry actually recover.
+    - The CPU wheel index skips the CUDA packages, which never run on a CPU node.
+    - transformers is upgraded alongside so both packages resolve from PYDEPS.
+    - Python workers on an executor share /tmp, so the install runs once under a lock
+      with a marker file, and any transformers already imported is purged from
+      sys.modules before the fresh copy loads.
     """
     import fcntl
 
@@ -88,7 +71,7 @@ def ensure_sentence_transformers():
         import importlib
         importlib.invalidate_caches()
 
-    # Drop any transformers this interpreter cached from the image before PYDEPS existed.
+    # Reload transformers from PYDEPS if an earlier import cached a different copy.
     for name in [m for m in list(sys.modules)
                  if m == "transformers" or m.startswith("transformers.")]:
         del sys.modules[name]
@@ -121,8 +104,7 @@ def ensure_corpus():
             if p.suffix.lower() == ".pdf"]
     for p in pdfs:
         shutil.copy2(p, dump / p.name)
-    # The CSV is a structured straggler on purpose: the reader flags it rather than
-    # dragging it through a text extractor.
+    # The CSV is included on purpose: the reader flags it as structured data.
     shutil.copy2(raw / "CUAD_v1" / "master_clauses.csv", dump / "master_clauses.csv")
     print(f"[rag-demo] staged {len(pdfs)} PDFs + annotations CSV -> {dump}", flush=True)
 
@@ -137,9 +119,7 @@ def write_hudi(df, name, record_key, precombine, base_format):
          .option("hoodie.datasource.write.recordkey.field", record_key)
          .option("hoodie.datasource.write.precombine.field", precombine))
     if base_format == "LANCE":
-        # The Lance writer only exists in HoodieSparkFileWriterFactory; without the SPARK
-        # record type the write routes through the Avro factory and throws
-        # "Lance base file format is currently only supported with the Spark engine".
+        # LANCE base files are written through the Spark-native record path.
         w = (w.option("hoodie.datasource.write.record.merger.impls",
                       "org.apache.hudi.DefaultSparkRecordMerger")
              .option("hoodie.write.record.merge.mode", "COMMIT_TIME_ORDERING"))
@@ -148,7 +128,7 @@ def write_hudi(df, name, record_key, precombine, base_format):
 
 
 ensure_corpus()
-# Before the session, and before anything can import the image's torch-less transformers.
+# Install before the session starts so the driver and the workers import the same copy.
 ensure_sentence_transformers()
 
 spark = SparkSession.builder.appName("rag_demo").getOrCreate()
@@ -172,8 +152,7 @@ print("\n[rag-demo] === step 1: what was lying in the dump ===", flush=True)
      .agg(F.count("uri").alias("files"))
      .orderBy(F.desc("files")).show(20, truncate=False))
 
-# A file the reader cannot parse does not stop the job -- it lands as a row carrying the
-# status and the reason, so failures stay queryable.
+# Unparseable files land as rows carrying the status and reason, so failures stay queryable.
 failures = docs.where(F.col("parse_status") == "FAILED")
 if failures.select("uri").head(1):
     failures.select("uri", "parse_error").show(5, truncate=80)
@@ -230,8 +209,7 @@ chunks = (read_hudi("contract_documents")
 if MAX_CHUNKS:
     chunks = chunks.limit(MAX_CHUNKS)
 
-# Hudi 1.2.0 bug: an empty-projection scan returns 0 rows on a lance table, so a bare
-# count() lies. Always aggregate over a column.
+# Count over a named column.
 n_chunks = chunks.agg(F.count("chunk_id").alias("c")).first()["c"]
 print(f"\n[rag-demo] === step 3: embedding {n_chunks} chunks with {MODEL} ===", flush=True)
 

@@ -20,8 +20,7 @@ data:
         -> format("training_dataset")  -> validated Together SFT JSONL + _manifest.json
                                        -> tokenized parquet + token manifest
 
-    Nothing is installed: the image ships quanton_llm_training, and its `tokenized` extra is
-    transformers + jinja2, which are Rust tokenizers and pull no torch.
+    Nothing is installed: the image ships quanton_llm_training.
 
     Usage: finetune_demo.py <data_dir> [max_rows]
     """
@@ -39,9 +38,7 @@ data:
     MAX_ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 500
 
     TABLES, EXPORTS = f"{DATA}/tables", f"{DATA}/exports"
-    # An exported training dataset is immutable, so format("training_dataset") refuses to
-    # write into a path that already holds one. A UTC stamp gives each run its own version
-    # directory. The Hudi tables are the opposite contract on purpose: they upsert in place.
+    # Exported datasets are immutable, so each run writes its own versioned directory.
     VERSION = os.environ.get("QU_EXPORT_VERSION",
                              datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
 
@@ -63,8 +60,6 @@ data:
                    .where(F.length("span") > 40))
 
     # Whitespace-normalised prefix match: find the chunk that contains each expert span.
-    # This is the grounding step -- a human lawyer marked the span, so the answer is not
-    # something the model invented.
     norm = lambda c: F.lower(F.regexp_replace(c, r"\s+", " "))  # noqa: E731
     positives = (annotations
                  .withColumn("span_key", F.substring(norm(F.col("span")), 1, 120))
@@ -125,8 +120,7 @@ data:
           .save(tokenized_path))
     print(f"[finetune-demo] tokenized parquet + manifest -> {tokenized_path}", flush=True)
 
-    # The writer produces the dataset in object storage and never uploads. The manifest's
-    # `load` section names the command the caller still owes.
+    # The writer never uploads. The manifest's `load` section names the upload command.
     for p in (jsonl_path, tokenized_path):
         for m in glob.glob(os.path.join(p, "_manifest.json")):
             print(f"\n[finetune-demo] _manifest.json ({os.path.basename(p)}):", flush=True)
@@ -146,23 +140,21 @@ spec:
   sparkApplicationSpec:
     type: Python
     mode: cluster
-    # Placeholder. The operator overrides it: sparkVersion 4.x + the default
-    # accelerator (native) resolve to onehouseConfig.quantonSpark4Image.
+    # Placeholder. sparkVersion 4.x + the default accelerator (native) resolve to
+    # onehouseConfig.quantonSpark4Image.
     image: "apache/spark:4.0.0"
     imagePullPolicy: IfNotPresent
     mainApplicationFile: "local:///mnt/scripts/finetune_demo.py"
     arguments:
       - "/data/rag-demo"
       - "500"
-    # 4.1.x selects the Spark 4 line. Quote it -- an unquoted 4.1 is a YAML number
-    # and the job is rejected.
+    # Selects the Spark 4 image. Quote it so YAML reads a string.
     sparkVersion: "4.1.0"
     restartPolicy:
       type: Never
     sparkConf:
-      # The operator regenerates spark.properties from this block and bypasses the image's
-      # /opt/spark/conf/spark-defaults.conf entirely, so the Hudi + Lance wiring the image
-      # bakes in MUST be repeated here or neither format is available at runtime.
+      # The operator builds spark.properties from this block, so the Hudi + Lance
+      # settings are set here.
       spark.driver.extraClassPath: "/opt/spark/user-jars/*"
       spark.executor.extraClassPath: "/opt/spark/user-jars/*"
       spark.sql.extensions: org.apache.spark.sql.hudi.HoodieSparkSessionExtension
