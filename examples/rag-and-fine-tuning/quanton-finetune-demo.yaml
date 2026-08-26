@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quanton-finetune-demo-script
+  namespace: default
+data:
+  finetune_demo.py: |
+    #!/usr/bin/env python3
+    """From lakehouse tables to a fine-tuning dataset — the blog, on Kubernetes.
+
+      https://quanton.dev/blog/fine-tuning-from-lakehouse-tables/
+
+    Reads the tables rag_demo.py produced and turns them into a validated fine-tuning
+    dataset. Every training row is grounded in an expert annotation: each labelled clause
+    span is located inside the parsed chunk that contains it, giving
+    (question about the clause, chunk as context, expert answer).
+
+      contract_chunks (LANCE) x contract_annotations (PARQUET)
+        -> build the rows in SQL
+        -> format("training_dataset")  -> validated Together SFT JSONL + _manifest.json
+                                       -> tokenized parquet + token manifest
+
+    Nothing is installed: the image ships quanton_llm_training.
+
+    Usage: finetune_demo.py <data_dir> [max_rows]
+    """
+
+    import glob
+    import json
+    import os
+    import sys
+    from datetime import datetime, timezone
+
+    from pyspark.sql import SparkSession
+    from pyspark.sql import functions as F
+
+    DATA = sys.argv[1] if len(sys.argv) > 1 else "/data/rag-demo"
+    MAX_ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 500
+
+    TABLES, EXPORTS = f"{DATA}/tables", f"{DATA}/exports"
+    # Exported datasets are immutable, so each run writes its own versioned directory.
+    VERSION = os.environ.get("QU_EXPORT_VERSION",
+                             datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+
+    spark = SparkSession.builder.appName("finetune_demo").getOrCreate()
+    spark.sparkContext.setLogLevel("WARN")
+
+    import quanton_llm_training
+
+    quanton_llm_training.register(spark)
+
+
+    def read_hudi(name):
+        return spark.read.format("hudi").load(f"{TABLES}/{name}")
+
+
+    chunks = read_hudi("contract_chunks").select("file_name", "pos", "chunk")
+    annotations = (read_hudi("contract_annotations")
+                   .select("file_name", "clause_type", F.explode("clause_spans").alias("span"))
+                   .where(F.length("span") > 40))
+
+    # Whitespace-normalised prefix match: find the chunk that contains each expert span.
+    norm = lambda c: F.lower(F.regexp_replace(c, r"\s+", " "))  # noqa: E731
+    positives = (annotations
+                 .withColumn("span_key", F.substring(norm(F.col("span")), 1, 120))
+                 .join(chunks.withColumn("chunk_norm", norm(F.col("chunk"))), "file_name")
+                 .where(F.expr("instr(chunk_norm, span_key) > 0"))
+                 .groupBy("file_name", "clause_type", "span")
+                 .agg(F.first("chunk").alias("chunk")))
+
+    n_pos = positives.agg(F.count("span").alias("c")).first()["c"]
+    print(f"\n[finetune-demo] expert spans located in parsed chunks: {n_pos}", flush=True)
+
+    train = positives.select(
+        F.array(
+            F.struct(
+                F.lit("system").alias("role"),
+                F.lit("You are a contract analyst. Answer strictly from the excerpt; "
+                      "quote the contract language that supports your answer.").alias("content"),
+            ),
+            F.struct(
+                F.lit("user").alias("role"),
+                F.concat(
+                    F.lit('Does the following contract excerpt contain a "'),
+                    F.col("clause_type"),
+                    F.lit('" clause? If yes, quote the relevant language.\n\nExcerpt:\n'),
+                    F.col("chunk"),
+                ).alias("content"),
+            ),
+            F.struct(
+                F.lit("assistant").alias("role"),
+                F.concat(
+                    F.lit("Yes. This excerpt contains a "),
+                    F.col("clause_type"),
+                    F.lit(' clause: "'),
+                    F.substring(F.col("span"), 1, 800),
+                    F.lit('"'),
+                ).alias("content"),
+            ),
+        ).alias("messages")
+    ).limit(MAX_ROWS)
+
+    jsonl_path = f"{EXPORTS}/cuad-analyst-sft/{VERSION}"
+    (train.write.format("training_dataset")
+          .option("provider", "together")
+          .option("training_type", "sft")
+          .mode("append")
+          .save(jsonl_path))
+    print(f"[finetune-demo] validated Together SFT JSONL -> {jsonl_path}", flush=True)
+
+    # outputFormat=tokenized emits parquet plus a token manifest, so you know the token bill
+    # and the truncation count before you pay for a training run.
+    tokenized_path = f"{EXPORTS}/cuad-analyst-sft-tokenized/{VERSION}"
+    (train.limit(200).write.format("training_dataset")
+          .option("provider", "together")
+          .option("training_type", "sft")
+          .option("outputFormat", "tokenized")
+          .option("tokenizer", "Qwen/Qwen2.5-0.5B-Instruct")
+          .mode("append")
+          .save(tokenized_path))
+    print(f"[finetune-demo] tokenized parquet + manifest -> {tokenized_path}", flush=True)
+
+    # The writer never uploads. The manifest's `load` section names the upload command.
+    for p in (jsonl_path, tokenized_path):
+        for m in glob.glob(os.path.join(p, "_manifest.json")):
+            print(f"\n[finetune-demo] _manifest.json ({os.path.basename(p)}):", flush=True)
+            print(json.dumps(json.load(open(m)), indent=2), flush=True)
+
+    print(f"\n[finetune-demo] PASS — {n_pos} grounded spans, "
+          f"exported {min(n_pos, MAX_ROWS)} SFT rows", flush=True)
+    spark.stop()
+
+---
+apiVersion: quantonsparkoperator.onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: quanton-finetune-demo
+  namespace: default
+spec:
+  sparkApplicationSpec:
+    type: Python
+    mode: cluster
+    # Placeholder. sparkVersion 4.x + the default accelerator (native) resolve to
+    # onehouseConfig.quantonSpark4Image.
+    image: "apache/spark:4.0.0"
+    imagePullPolicy: IfNotPresent
+    mainApplicationFile: "local:///mnt/scripts/finetune_demo.py"
+    arguments:
+      - "/data/rag-demo"
+      - "500"
+    # Selects the Spark 4 image. Quote it so YAML reads a string.
+    sparkVersion: "4.1.0"
+    restartPolicy:
+      type: Never
+    sparkConf:
+      # The operator builds spark.properties from this block, so the Hudi + Lance
+      # settings are set here.
+      spark.driver.extraClassPath: "/opt/spark/user-jars/*"
+      spark.executor.extraClassPath: "/opt/spark/user-jars/*"
+      spark.sql.extensions: org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+      spark.serializer: org.apache.spark.serializer.KryoSerializer
+      spark.kryo.registrator: org.apache.spark.HoodieSparkKryoRegistrar
+      spark.sql.shuffle.partitions: "8"
+      spark.sql.execution.arrow.maxRecordsPerBatch: "1000"
+      spark.driver.memoryOverheadFactor: "0.3"
+      spark.executor.memoryOverheadFactor: "0.3"
+
+    volumes:
+      - name: scripts
+        configMap:
+          name: quanton-finetune-demo-script
+      - name: demo-data
+        persistentVolumeClaim:
+          claimName: rag-and-fine-tuning-demo-pvc
+    driver:
+      cores: 1
+      memory: "4096m"
+      serviceAccount: spark-operator-spark
+      labels:
+        version: "4.1.0"
+      volumeMounts:
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: demo-data
+          mountPath: /data/rag-demo
+    executor:
+      cores: 1
+      instances: 1
+      memory: "4096m"
+      labels:
+        version: "4.1.0"
+      volumeMounts:
+        - name: scripts
+          mountPath: /mnt/scripts
+        - name: demo-data
+          mountPath: /data/rag-demo
