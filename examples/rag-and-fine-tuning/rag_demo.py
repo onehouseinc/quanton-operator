@@ -47,6 +47,12 @@ def ensure_sentence_transformers():
     - Python workers on an executor share /tmp, so the install runs once under a lock
       with a marker file, and any transformers already imported is purged from
       sys.modules before the fresh copy loads.
+    - All three names are bounded by major version. sentence-transformers 5 and later
+      route encode() through a processor table with no entry for a plain text BERT
+      tokenizer, and transformers 4.x does not catch the error huggingface_hub 1.x
+      raises for a model repo that has no chat template. Either one fails per worker,
+      so a stage can lose every retry on one partition while the others pass. Working
+      set: sentence-transformers 4.1.0, transformers 4.57.6, huggingface_hub 0.36.2.
     """
     import fcntl
 
@@ -64,7 +70,7 @@ def ensure_sentence_transformers():
                 "--target", PYDEPS, "--upgrade",
                 "--index-url", "https://download.pytorch.org/whl/cpu",
                 "--extra-index-url", "https://pypi.org/simple",
-                "sentence-transformers", "transformers",
+                "sentence-transformers<5", "transformers<5", "huggingface_hub<1",
             ])
             with open(marker, "w") as m:
                 m.write("ok")
@@ -85,7 +91,7 @@ def ensure_corpus():
         print(f"[rag-demo] corpus already staged at {DUMP}", flush=True)
         return
     subprocess.check_call([sys.executable, "-m", "pip", "install",
-                           "--quiet", "--target", PYDEPS, "huggingface_hub"])
+                           "--quiet", "--target", PYDEPS, "huggingface_hub<1"])
     if PYDEPS not in sys.path:
         sys.path.insert(0, PYDEPS)
     import shutil

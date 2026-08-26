@@ -82,7 +82,6 @@ Step 1 output is deterministic — check it exactly:
 
 ```
 |application/pdf  |SUCCESS        |pypdfium2  |510  |
-|text/html        |SUCCESS        |selectolax |2    |
 |application/x-csv|STRUCTURED_DATA|NULL       |1    |
 ```
 

@@ -40,7 +40,6 @@ Step 1 reports what the reader found:
 |content_type     |parse_status   |parser_used|files|
 +-----------------+---------------+-----------+-----+
 |application/pdf  |SUCCESS        |pypdfium2  |510  |
-|text/html        |SUCCESS        |selectolax |2    |
 |application/x-csv|STRUCTURED_DATA|NULL       |1    |
 +-----------------+---------------+-----------+-----+
 ```
@@ -55,7 +54,7 @@ retrieved contracts carry the expert `Non-Compete` label, and a `GROUP BY` that 
 vector search. It ends with:
 
 ```
-[rag-demo] PASS — documents(lance)=512 chunks(lance)=400 annotations(parquet)=...
+[rag-demo] PASS — documents(lance)=510 chunks(lance)=400 annotations(parquet)=...
 ```
 
 ### 2. Fine-tuning
@@ -100,7 +99,14 @@ job code. `rag_demo.py` installs `sentence-transformers` from the CPU wheel inde
 skips the CUDA packages. The fine-tuning demo installs nothing. If you use
 `sentence-transformers` under `mapInPandas` in your own job, `ensure_sentence_transformers()`
 in [`rag_demo.py`](rag_demo.py) shows how to install once per executor across reused
-Python workers.
+Python workers. The installed versions are bounded by major version: `sentence-transformers`
+5 and later cannot build a plain text BERT tokenizer, and `transformers` 4.x does not
+catch the error `huggingface_hub` 1.x raises for a model with no chat template.
+
+**The embedding executor needs a larger overhead budget.** torch lives outside the JVM
+heap, so `spark.executor.memoryOverheadFactor` is `1.2` where the driver keeps `0.3`. At
+the driver's factor the embedding stage loses executors to the OOM killer. The
+fine-tuning demo loads no torch and keeps `0.3`.
 
 ## Storage
 
