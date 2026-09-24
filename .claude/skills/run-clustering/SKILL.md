@@ -1,144 +1,172 @@
 ---
 name: run-clustering
-description: Run the Hudi or Iceberg clustering demo on minikube — writes a 100-row table with a complex (Struct/Array/Map/nested) schema, forces a many-tiny-files layout, then triggers the format's native clustering procedure with spark.quanton.clustering.accelerate=true and verifies it succeeded
+description: Run the Hudi or Iceberg clustering demo on minikube. Writes a 100-row table with a nested Struct, Array, and Map schema, forces many tiny files, runs the format's native clustering procedure with spark.quanton.clustering.accelerate=true, and verifies the result. Use whenever the user wants to demo, test, or verify clustering, compaction, file layout optimisation, rewrite_data_files, or run_clustering on Hudi or Iceberg with Quanton.
+compatibility: Requires kubectl and helm, a minikube cluster with the Spark Operator and the Quanton Operator installed, and network access to pull the Quanton image and, for Hudi, Maven Central.
 allowed-tools: Bash, Read, AskUserQuestion
+metadata:
+  version: "2"
 ---
 
-# Run Quanton Clustering Demo: Hudi and/or Iceberg
+# Run the clustering demo on Hudi or Iceberg
 
-You are a guided demo agent for Quanton's native clustering acceleration. Run the chosen demo, give live progress, and report whether clustering succeeded.
+Each demo is one self-contained manifest: a ConfigMap with the PySpark script inline, a PVC,
+and a `QuantonSparkApplication`. The script writes 100 rows with a complex schema, forces a
+many-tiny-files layout, then calls the format's native clustering procedure with
+`spark.quanton.clustering.accelerate=true` and checks the outcome. Your job is to run the
+chosen demo, report progress you observed, and quote the script's own verdict line.
 
-The demos live in `examples/`:
+## How to read this skill
 
-| Format | Manifest | Script |
+This skill is written for any agent runtime. It names actions, not tools. Map them like this:
+
+| Action | What to do in your runtime |
+|---|---|
+| **Run** | Execute the command with your shell tool. Read the whole output before you continue. |
+| **Read** | Open the file with your file-read tool. |
+| **Ask** | Put the question to the user and end your turn. Use a structured-choice tool if you have one, otherwise plain text. |
+| **Wait** | Use the bounded loop the step gives you. Set its bound below your runtime's command timeout. Never sleep or poll in your own turns. |
+
+## Ground rules
+
+1. **Report only what a command printed.** Quote the line that supports each claim. If you did not see a value, say so.
+2. **One check per claim.** "Installed", "Running", "Completed", and "PASS" each need command output that shows the word.
+3. **The fact table below is a plan, not the truth.** If a command contradicts it, trust the command, tell the user, and stop if the difference matters.
+4. **Every wait is bounded.** Never run a command that can block without a timeout. Do not use `kubectl logs -f`.
+5. **Ask before destructive or costly actions.** Deleting, overwriting, and submitting work to a paid cluster each need a fresh yes. A yes covers one action.
+6. **Never print secrets.** This includes `onehouse-values.yaml`, Kubernetes Secret data, and API keys.
+7. **Separate environment problems from engine problems**, and name the evidence for the split.
+8. **Do not guess names, phases, or numbers.** Get pod names from `kubectl get pods`. Get counts from `grep -c`.
+
+## Facts this skill relies on
+
+| Item | Hudi | Iceberg |
 |---|---|---|
-| Hudi | `examples/clustering-demo/quanton-hudi-clustering-demo.yaml` | `examples/clustering-demo/hudi_clustering_demo.py` |
-| Iceberg | `examples/clustering-demo/quanton-iceberg-clustering-demo.yaml` | `examples/clustering-demo/iceberg_clustering_demo.py` |
+| Manifest | `examples/clustering-demo/quanton-hudi-clustering-demo.yaml` | `examples/clustering-demo/quanton-iceberg-clustering-demo.yaml` |
+| Script (for reading only) | `examples/clustering-demo/hudi_clustering_demo.py` | `examples/clustering-demo/iceberg_clustering_demo.py` |
+| App name | `quanton-hudi-clustering-demo` | `quanton-iceberg-clustering-demo` |
+| PVC | `quanton-hudi-clustering-demo-pvc` | `quanton-iceberg-clustering-demo-pvc` |
+| Expected driver pod | `quanton-hudi-clustering-demo-driver` | `quanton-iceberg-clustering-demo-driver` |
+| Procedure the script calls | `run_clustering(order='region,ts', op='scheduleandexecute')` | `rewrite_data_files(strategy='sort', sort_order='region ASC, ts ASC')` |
+| Log prefix | `[hudi-clustering]` | `[iceberg-clustering]` |
+| Verdict line starts with | `[hudi-clustering] PASS —` | `[iceberg-clustering] PASS —` |
+| What the verdict asserts | 100 rows preserved and at least one `.replacecommit` on the timeline | 100 rows preserved and the data file count dropped |
 
-Each manifest is a self-contained ConfigMap (inline script) + PVC + QuantonSparkApplication. Both write 100 rows with a complex schema, force a many-tiny-files layout, then call the native clustering procedure with `spark.quanton.clustering.accelerate=true`.
+All resources live in namespace `default`. `examples/clustering-demo/README.md` is the source
+of truth if this table and the repository disagree.
 
-## Phase 0: Interactive Configuration
+## Procedure
 
-Use AskUserQuestion. Keep it short — the demo is small.
-
-### Q1: Which format?
-
-> "Which clustering demo should I run?"
-
-Options:
-- **Hudi only** — `run_clustering(order='region,ts', op='scheduleandexecute')`
-- **Iceberg only** — `rewrite_data_files(strategy='sort', sort_order='region ASC, ts ASC')`
-- **Both** — Hudi then Iceberg, sequentially (PVCs are independent so they don't conflict, but pods are scheduled serially for clarity)
-
-### Q2: Cluster check (no question — just verify)
+### Step 1: Confirm the cluster
 
 Run:
+
 ```bash
 kubectl config current-context
-```
-Confirm it's `minikube`. If it's any other context, stop and tell the user to `kubectl config use-context minikube` first.
-
-Then:
-```bash
-helm list -A | grep -E "spark-operator|quanton-operator"
-```
-If either operator is missing, stop and tell the user to run `/setup-and-run-example` first.
-
-## Phase 1: Run the demo
-
-For each chosen format:
-
-### 1. Clean up any prior run
-
-```bash
-kubectl delete -f examples/clustering-demo/quanton-<fmt>-clustering-demo.yaml --ignore-not-found
-kubectl delete pvc quanton-<fmt>-clustering-demo-pvc -n default --ignore-not-found
+helm list -A -o json | python3 -c 'import json,sys; print("\n".join(f"{r[\"name\"]} {r[\"namespace\"]} {r[\"chart\"]}" for r in json.load(sys.stdin) if "spark-operator" in r["chart"] or "quanton-operator" in r["chart"]) or "no operator releases")'
 ```
 
-### 2. Apply the manifest
+The context must be `minikube`. These manifests write to a PVC in `default` and are not meant
+for a shared cluster. If it is anything else, tell the user and stop.
+
+Both a `spark-operator` chart and a `quanton-operator` chart must appear. If one is missing,
+name it, point the user to the `setup-and-run-example` skill, and stop.
+
+### Step 2: Ask which format
+
+Ask: "Which clustering demo should I run?" with options **Hudi**, **Iceberg**, **Both**. For
+Both, run Hudi first, then Iceberg.
+
+### Step 3: Run one format
+
+Repeat for each chosen format, substituting values from the fact table.
+
+1. Clean up a prior run:
 
 ```bash
-kubectl apply -f examples/clustering-demo/quanton-<fmt>-clustering-demo.yaml
+kubectl delete -f <manifest> --ignore-not-found
+kubectl delete pvc <pvc> -n default --ignore-not-found
 ```
 
-Tell the user: "Submitted `quanton-<fmt>-clustering-demo`. The Quanton operator will provision the driver + executor pods. The first run pulls the Quanton spark image (~3.5 GB on minikube) and, for Hudi, downloads `hudi-spark3.5-bundle:0.15.0` from Maven Central — expect a 1–3 min cold start."
-
-### 3. Live progress
-
-Poll every ~20s until the QuantonSparkApplication phase is `COMPLETED` or `FAILED`:
+2. Apply:
 
 ```bash
-kubectl get quantonsparkapplication quanton-<fmt>-clustering-demo -n default \
-  -o jsonpath='{.status.phase}'
+kubectl apply -f <manifest>
 ```
 
-Between polls, give the user a one-line status update:
-- **UNKNOWN**: "Operator reconciling, driver not yet scheduled..."
-- **RUNNING**: "Driver pod running — generating data and running clustering."
-- **COMPLETED** / **FAILED**: stop polling, move to step 4.
+Tell the user the app name you submitted. The first run pulls the Quanton Spark image (about
+3.5 GB) and, for Hudi, downloads `hudi-spark3.5-bundle_2.12:0.15.0` from Maven Central.
+Expect a quiet 1 to 3 minutes before the driver reaches `Running`.
 
-If the user asks for more detail mid-flight, tail the driver log:
-```bash
-kubectl logs -n default quanton-<fmt>-clustering-demo-driver --tail=20
-```
-
-### 4. Report the outcome
-
-After the CRD reaches a terminal phase, grep the driver log for the demo's own status lines:
+3. Wait with this loop. It returns after at most 8 minutes or at a terminal phase. If it
+   returns without one, report the last phase you saw and run it again.
 
 ```bash
-kubectl logs -n default quanton-<fmt>-clustering-demo-driver 2>&1 \
-  | grep -E "<fmt>-clustering|PASS|FAIL"
+app=<app-name>; ns=default; bound=$((SECONDS + 8*60))
+while [ "$SECONDS" -lt "$bound" ]; do
+  phase=$(kubectl get quantonsparkapplication "$app" -n "$ns" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+  pod=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | grep "^${app}-driver" | awk '{print $1" "$3}')
+  echo "$(date +%T) phase=${phase:-<none>} driver=${pod:-<none>}"
+  case "$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')" in COMPLETED|FAILED) break ;; esac
+  sleep 20
+done
 ```
 
-The demos print clear markers:
+Between loop runs, tell the user the phase and driver status you saw, in one line. If the
+user asks for detail, run `kubectl logs <driver-pod> -n default --tail=20` and quote the
+`[<prefix>]` lines.
 
-- **Hudi** `PASS` looks like:
-  ```
-  [hudi-clustering] On-disk parquet files: 50 -> 51 (Hudi keeps old files; new ones + .replacecommit are added)
-  [hudi-clustering] .replacecommit files in .hoodie/: 1
-  [hudi-clustering] PASS — 100 rows preserved, 1 replacecommit(s) on timeline
-  ```
-- **Iceberg** `PASS` looks like:
-  ```
-  [iceberg-clustering] Files: 40 -> 1
-  [iceberg-clustering] PASS — 100 rows preserved, files compacted 40 -> 1
-  ```
-
-Surface those lines verbatim to the user and call out the file-count change. **Do not present wall-times** — the demos use tiny 100-row tables where startup dominates and Hudi vs Iceberg timings are not comparable; surfacing them invites misleading conclusions. If the demo failed, also tail the last 50 log lines and surface any `Exception` / `Caused by` lines.
-
-### 5. (Optional) Native-acceleration markers
-
-If the user asks "did Quanton's native path actually engage?" — grep the driver log:
+4. Read the verdict:
 
 ```bash
-kubectl logs -n default quanton-<fmt>-clustering-demo-driver 2>&1 \
-  | grep -iE "NativeClusteringGroupWriter|libvelox.so|VeloxBackend|Components registered"
+kubectl logs <driver-pod> -n default 2>&1 | grep -E "^\[(hudi|iceberg)-clustering\]|PASS|FAIL"
 ```
 
-Look for:
-- `Loaded clustering group writer: quanton-velox-clustering-0x (ai.onehouse.hudi.clustering.NativeClusteringGroupWriterImpl)` — Hudi native writer engaged
-- `libvelox.so has been loaded` / `Components registered within order: velox, velox-hudi, velox-delta, velox-iceberg` — Quanton's native engine up
-  (the literal strings come from the runtime; they're the markers to grep for)
+Quote the matching lines verbatim. Point out the file-count or timeline change only from the
+quoted lines. **Do not report wall-clock times.** The table has 100 rows, so startup dominates
+and a Hudi versus Iceberg timing would mislead.
 
-Note: `acceleratedStages: 0` from `QuantonAccelerationTracker` does **not** mean acceleration is off — the tracker only counts natively-accelerated *Spark query stages*, not the Hudi/Iceberg clustering procedure code paths. The native writer can be active even when this counter is 0.
+If there is no `PASS` line, or the phase was `Failed`, run
+`kubectl logs <driver-pod> -n default --tail=50` and quote any `Exception` or `Caused by`
+line. Do not call the demo passed.
 
-## Phase 2: Cleanup (optional)
+5. Only if the user asks whether the native path engaged, run:
 
-Ask the user: "Demo finished. Should I clean up the resources?"
-
-- Options: "Clean up everything" / "Keep them for inspection"
-
-If clean up:
 ```bash
-kubectl delete -f examples/clustering-demo/quanton-<fmt>-clustering-demo.yaml --ignore-not-found
-kubectl delete pvc quanton-<fmt>-clustering-demo-pvc -n default --ignore-not-found
+kubectl logs <driver-pod> -n default 2>&1 | grep -iE "NativeClusteringGroupWriter|libvelox.so|VeloxBackend|Components registered"
 ```
 
-(The PVC is named `quanton-<fmt>-clustering-demo-pvc`; it's gitignored from the chart and safe to delete.)
+Quote whatever prints. Known markers are a `Loaded clustering group writer` line naming
+`NativeClusteringGroupWriterImpl` (Hudi native writer) and `libvelox.so has been loaded` or
+`Components registered within order` (native engine up). If the grep prints nothing, say the
+markers were not found; do not infer either way. Note also that an `acceleratedStages: 0`
+line from `QuantonAccelerationTracker` counts accelerated Spark query stages only, not the
+clustering procedure, so it does not mean acceleration was off.
 
-## Caveats
+### Step 4: Offer cleanup
 
-- **Apple Silicon (M1/M2/M3):** Older Quanton spark images (`release-v0.2.0-al2023` and earlier) only ship a Graviton SVE2 build of the native engine and will `SIGILL` on aarch64 Mac. The `release-v0.9.0-al2023` and later images include an aarch64 build that works on Apple Silicon.
-- **Hudi clustering file count:** Hudi tombstones old files via the `.hoodie` timeline (`.replacecommit`) instead of physically deleting them. The Hudi demo asserts on the timeline, not on the parquet-file count.
-- **Iceberg jars on the Quanton image:** Bundled at `/opt/spark/user-jars/`. The manifest uses `spark.{driver,executor}.extraClassPath` to put them on the classpath; do NOT add iceberg via `spark.jars.packages` in parallel — a second shaded-parquet copy on the classpath breaks with a `ClassCastException`.
+Ask: "Demo finished. Clean up the resources, or keep them for inspection?" On clean up, run the
+two delete commands from Step 3.1 for each format you ran.
+
+## Report
+
+```
+Clustering demo on context minikube
+  <Format>: phase <Completed|Failed> — <quoted verdict line, or "no PASS line found">
+  Cleanup: <done | kept>
+```
+
+## Failure handling
+
+- **`SIGILL` or `signal 4` in the log.** The native engine in the image does not match the CPU.
+  Run `uname -m` and quote the `image:` line from the manifest. Images at
+  `release-v0.9.0-al2023` or later carry an aarch64 build for Apple Silicon; earlier images
+  carry only a Graviton build. Report both facts; this is an image and hardware match problem.
+- **`ClassCastException` mentioning parquet on Iceberg.** Two Iceberg copies are on the
+  classpath. The image bundles Iceberg at `/opt/spark/user-jars/` and the manifest uses
+  `extraClassPath`. Check whether `spark.jars.packages` was added; that is the usual cause.
+- **Hudi file count did not drop.** Expected. Hudi tombstones old files through the
+  `.hoodie` timeline with a `.replacecommit` instead of deleting them. The verdict asserts on
+  the timeline, not the file count.
+- **Driver stuck before `Running` for more than 3 minutes.** Run
+  `kubectl describe pod <driver-pod> -n default | tail -20`. Image pull or Maven download is the
+  usual reason. This is a network or registry problem.
