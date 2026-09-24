@@ -1,258 +1,244 @@
 ---
 name: run-tpcds-1tb
-description: Run the TPC-DS 1 TB benchmark on a dev or staging Kubernetes cluster, comparing OSS Apache Spark against Quanton on Parquet, Hudi, and Iceberg. Generates the dataset, loads the lakehouse formats, runs the 99 queries, and runs a lake-loader merge workload that upserts change batches into a fact table and validates the result. Use when the user asks to benchmark Quanton at scale, validate query or merge performance, generate TPC-DS at 1 TB, or compare engines on a real cluster.
-allowed-tools: Bash, Read, Glob, Grep, Write, AskUserQuestion
+description: Run the TPC-DS 1 TB benchmark suite in benchmarks/tpcds-1tb/ on a dev or staging Kubernetes cluster, comparing OSS Apache Spark against Quanton on Parquet, Hudi, and Iceberg. Generates the dataset into object storage, loads the lakehouse formats, runs the 99 queries, runs lake-loader merge rounds with validation, and reports. Use whenever the user wants to benchmark Quanton at scale, compare engines on a real cluster, generate TPC-DS at scale factor 100 or 1000, or validate query or merge performance beyond minikube.
+compatibility: Requires kubectl, docker with buildx, python3, and a kubeconfig context for a cluster with the Spark Operator and the Quanton Operator installed. Needs object storage the driver service account can read and write, and a container registry the cluster can pull from.
+allowed-tools: Bash, Read, Write, AskUserQuestion
+metadata:
+  version: "2"
 ---
 
 # Run the TPC-DS 1 TB benchmark
 
-You drive the benchmark suite in `benchmarks/tpcds-1tb/`. Your job is to get the user to a
-trustworthy comparison of OSS Apache Spark against Quanton on their own cluster, and to keep
-them informed while it runs.
+You drive the suite in `benchmarks/tpcds-1tb/`. `run.sh` does all the work; you configure it,
+start each phase with the user's agreement, read progress back from its log, and present the
+report without spin. This is a long job. A full 1 TB run takes many hours and costs real money
+in compute and storage. Never start a phase the user has not agreed to.
 
-This is a long job. A full 1 TB run takes many hours and costs real money in compute and
-storage. Treat the user's cluster with care, confirm before each expensive phase, and never
-start a phase the user has not agreed to.
+## How to read this skill
 
-## What the suite does
+This skill is written for any agent runtime. It names actions, not tools. Map them like this:
 
-| Phase | What it runs |
+| Action | What to do in your runtime |
 |---|---|
-| `preflight` | Checks the cluster, namespace, service account, and operator CRDs |
-| `configmaps` | Publishes the benchmark scripts and the 99 query files |
-| `datagen` | Runs `dsdgen` across the executors, writing Parquet to object storage |
-| `load` | Builds the Hudi and Iceberg copies from that Parquet |
-| `query` | Runs the 99 TPC-DS queries per engine per format |
-| `merge` | Runs the lake-loader upsert rounds per engine per format |
-| `report` | Collects the JSON results and prints the comparison |
+| **Run** | Execute the command with your shell tool. Read the whole output before you continue. |
+| **Read** | Open the file with your file-read tool. |
+| **Ask** | Put the question to the user and end your turn. Use a structured-choice tool if you have one, otherwise plain text. |
+| **Wait** | Use the bounded loop the step gives you. Set its bound below your runtime's command timeout. Never sleep or poll in your own turns. |
 
-Read `benchmarks/tpcds-1tb/README.md` before you start. Read `run.sh` when you need to know
-exactly what a phase does. Do not reimplement any of it inline: call `run.sh`.
+## Ground rules
 
-## Phase 0: Configuration
+1. **Report only what a command printed.** Quote the line that supports each claim. If you did not see a value, say so.
+2. **One check per claim.** "Installed", "Running", "Completed", and "PASS" each need command output that shows the word.
+3. **The fact table below is a plan, not the truth.** If a command contradicts it, trust the command, tell the user, and stop if the difference matters.
+4. **Every wait is bounded.** Never run a command that can block without a timeout. Do not use `kubectl logs -f`.
+5. **Ask before destructive or costly actions.** Deleting, overwriting, and submitting work to a paid cluster each need a fresh yes. A yes covers one action.
+6. **Never print secrets.** This includes `onehouse-values.yaml`, Kubernetes Secret data, and API keys.
+7. **Separate environment problems from engine problems**, and name the evidence for the split.
+8. **Do not guess names, phases, or numbers.** Get pod names from `kubectl get pods`. Get counts from `grep -c`.
 
-Check first, ask second. Run these before asking anything:
+## Facts this skill relies on
+
+| Item | Value |
+|---|---|
+| Suite directory | `benchmarks/tpcds-1tb/`. Read its `README.md` first. Read `run.sh` when you need to know what a phase does. Never reimplement a phase inline. |
+| Config file | `benchmarks/tpcds-1tb/bench.env`, copied from `bench.env.example`. Gitignored. |
+| Required config keys | `STORAGE_URI`, `NAMESPACE`, `SERVICE_ACCOUNT`, `BENCH_IMAGE`. `run.sh` refuses to start while any of them is empty or contains `CHANGE-ME`. |
+| Phases, in order | `preflight`, `configmaps`, `datagen`, `load`, `query`, `merge`, `report` |
+| `run.sh` flags | `--phase <name>`, `--run-id <id>`, `--formats "<list>"`, `--engines "<list>"`, `--config <file>`, `--dry-run` |
+| Run id | Defaults to `sf<SF>-<timestamp>` **per invocation**. Pass the same `--run-id` to every phase, or the results land in different directories and the report only sees the last one. |
+| Results | `benchmarks/tpcds-1tb/results/<run-id>/`, with `summary.md` written by the report phase |
+| Operator CRDs | `sparkapplications.sparkoperator.k8s.io` and `quantonsparkapplications.quantonsparkoperator.onehouse.ai` |
+| Merge validation line | `merge <s>s \| rows <n> (expected <n>) \| probe mismatches <n> \| PASS` or `FAIL` |
+| Query progress lines | `Running <n> queries, <r> round(s), warmup=<bool>`, then `--- warmup round (not timed) ---`, `--- timed round i/r ---`, and `Total <s>s \| success <n> \| failed <n>` |
+| Datagen progress lines | `Generating <table> (parallel=<n>) -> <uri>` then `  <table>: <rows> rows in <s>s` |
+| Timeout | `PHASE_TIMEOUT` in `bench.env`, default 43200 seconds |
+
+## Procedure
+
+### Step 1: Confirm the cluster before anything else
+
+Run:
 
 ```bash
 kubectl config current-context
-kubectl get nodes -L node.kubernetes.io/instance-type,kubernetes.io/arch
-kubectl get crd sparkapplications.sparkoperator.k8s.io \
-  quantonsparkapplications.quantonsparkoperator.onehouse.ai 2>&1
-ls benchmarks/tpcds-1tb/bench.env 2>/dev/null
+kubectl get nodes -L node.kubernetes.io/instance-type,kubernetes.io/arch --no-headers | awk '{print $1, $NF, $(NF-1)}' | sort | uniq -c | sort -rn | head
+kubectl get crd sparkapplications.sparkoperator.k8s.io quantonsparkapplications.quantonsparkoperator.onehouse.ai 2>&1
+ls benchmarks/tpcds-1tb/bench.env 2>&1
 ```
 
-Tell the user which cluster they are pointed at and confirm it is the one they meant. A 1 TB
-benchmark submitted to the wrong cluster is an expensive mistake.
+Ask: "This benchmark will submit multi-hour Spark jobs to the cluster in context `<name>`. Is
+that the cluster you mean?" Continue only on a clear yes. Quote the node types and
+architectures you saw.
 
-If either operator CRD is missing, say which one and stop. The Spark Operator is required.
-The Quanton Operator is required unless the user only wants the OSS baseline.
+If a CRD line says `NotFound`, name the missing operator and stop. The Spark Operator is always
+required. The Quanton Operator is required unless the user only wants the OSS baseline.
 
-### If `bench.env` does not exist
+### Step 2: Configure `bench.env`
 
-Copy the template and fill it in with the user. Ask these, using `AskUserQuestion`:
+**If the file does not exist**, run `cp benchmarks/tpcds-1tb/bench.env.example benchmarks/tpcds-1tb/bench.env`,
+then Ask these in order and write the answers into the file. Change only the keys the user
+answers; keep the JSON values in single quotes.
 
-**Q1: Object storage.** "Which object-storage path should the benchmark read and write?"
-Free text. Expect an `s3a://` or `gs://` URI. Everything the run produces goes underneath it.
+1. **Object storage.** "Which object-storage URI should the benchmark read and write under?"
+   Expect `s3a://` or `gs://`. Everything the run produces goes underneath it.
+2. **Namespace and service account.** Offer what exists. Run:
 
-**Q2: Namespace and service account.** Offer the namespaces that already hold a Spark
-service account, which you can find with:
 ```bash
-kubectl get sa -A -o json | python3 -c "
+kubectl get sa -A -o json | python3 -c '
 import json,sys
-for item in json.load(sys.stdin)['items']:
-    ann = item['metadata'].get('annotations', {})
-    if any('role-arn' in k or 'gcp-service-account' in k for k in ann):
-        print(item['metadata']['namespace'], item['metadata']['name'])
-"
+for it in json.load(sys.stdin)["items"]:
+    ann = it["metadata"].get("annotations", {})
+    if any("role-arn" in k or "gcp-service-account" in k for k in ann):
+        print(it["metadata"]["namespace"], it["metadata"]["name"])'
 ```
-The account needs read and write access to the storage URI. Say so.
 
-**Q3: Scale factor.** "What scale factor should I generate?"
-- `1000` for the full 1 TB run, which is the point of this suite.
-- `100` for a shorter run that still exercises every phase.
-- `10` to validate the pipeline end to end in well under an hour.
+   Say that the account needs read and write access to the storage URI, and that preflight
+   cannot verify that.
+3. **Scale factor.** Options `10` (validate the pipeline end to end, well under an hour),
+   `100` (every phase, a few hours), `1000` (the 1 TB run). Recommend a first-time user start
+   at 10 and rerun at 1000 once the pipeline works. A missing permission discovered eight hours
+   into datagen is expensive.
+4. **Formats and engines.** Default `parquet hudi iceberg` and `oss quanton`. Parquet alone is
+   the fastest way to a first number.
+5. **Executor shape.** Show the node types from Step 1 and propose a shape that fits. Defaults:
+   `EXECUTOR_INSTANCES=4`, `EXECUTOR_CORES=32`, `EXECUTOR_MEMORY=200g`. State the total core
+   and memory ask in one line.
 
-Recommend that a first-time user starts at 10, confirms the whole pipeline works, then reruns
-at 1000. A failure eight hours into datagen is a bad way to discover a missing permission.
+**If the file exists**, read it back in a short table (storage URI, namespace, service account,
+image, scale factor, formats, engines, executor shape) and Ask whether to use it as is.
 
-**Q4: Formats and engines.** "Which formats and which engines?" Default to all three formats
-and both engines. Parquet alone is the fastest way to get a first number.
+### Step 3: Make sure the image exists
 
-**Q5: Executor shape.** Show the node types you found and propose a shape that fits. State
-the total ask. The defaults are four executors of 32 cores and 200 GB, which is about 128
-cores. Let the user change the count, cores, and memory.
-
-Write the answers into `benchmarks/tpcds-1tb/bench.env`, starting from `bench.env.example`.
-That file is gitignored, so it is the right place for cluster-specific values. Keep the JSON
-values in single quotes.
-
-### If `bench.env` exists
-
-Read it back to the user in a short table: storage URI, namespace, service account, image,
-scale factor, formats, engines, executor shape. Ask whether to use it as is or change
-anything.
-
-### The benchmark image
-
-Check whether the image in `bench.env` exists in the registry. If the user has not built it:
+Read `BENCH_IMAGE` from `bench.env`. Run:
 
 ```bash
-cd benchmarks/tpcds-1tb
-docker buildx build --platform linux/<arch> -t <registry>/tpcds-bench:1.0 --push .
+docker manifest inspect "<BENCH_IMAGE>" >/dev/null 2>&1 && echo "image found" || echo "image not found or registry not reachable"
 ```
 
-Use the architecture you saw on the nodes. An `amd64` image will not run on `arm64` nodes.
-The build takes several minutes because it compiles `dsdgen` and downloads the format jars.
-
-## Phase 1: Preflight and dry run
-
-Always do this before submitting anything:
+If it prints `image found`, continue. Otherwise tell the user exactly that: the check failed,
+which means either the image is not there or this machine cannot reach the registry. Ask
+whether to build and push it. On yes, with the architecture from Step 1:
 
 ```bash
-cd benchmarks/tpcds-1tb
-./run.sh --phase preflight
-./run.sh --dry-run
+cd benchmarks/tpcds-1tb && docker buildx build --platform linux/<arm64|amd64> -t <BENCH_IMAGE> --push .
 ```
 
-The dry run renders every manifest without applying it. Skim the rendered output for the
-storage URIs, the service account, and the executor shape, and show the user the resource ask
-in one line. Then confirm before going further.
+An `amd64` image does not run on `arm64` nodes. The build compiles `dsdgen` and downloads the
+format jars, so it takes several minutes.
 
-## Phase 2: Data generation
+### Step 4: Preflight and dry run
 
-Tell the user what this costs before starting: at 1 TB it writes roughly 300 GB of Parquet
-and typically runs for a few hours.
+Pick a run id now and reuse it for every phase: `RUN_ID=sf<SF>-$(date +%Y%m%d-%H%M)`.
+Tell the user the id.
 
 ```bash
-./run.sh --phase datagen
+cd benchmarks/tpcds-1tb && ./run.sh --phase preflight
+cd benchmarks/tpcds-1tb && ./run.sh --dry-run --run-id <RUN_ID> 2>&1 | grep -E "serviceAccount|s3a://|gs://|instances:|cores:|memory:" | sort -u
 ```
 
-`run.sh` polls the job and prints progress. While it runs, give the user an update every
-minute or two in your own words. Useful checks:
+Quote the preflight result. From the dry run, show the user the storage URIs, service account,
+and executor shape in one short list. Ask for a go before Step 5.
+
+### Step 5: Run each phase in the background and read its log
+
+Before each of `datagen`, `load`, `query`, `merge`, tell the user what it costs and Ask for a
+fresh yes. Then start it detached and record the pid:
 
 ```bash
-kubectl get pods -n <namespace> | grep tpcds-datagen
-kubectl logs <driver-pod> -n <namespace> --tail=5
+cd benchmarks/tpcds-1tb && mkdir -p results && nohup ./run.sh --phase <phase> --run-id <RUN_ID> > results/<RUN_ID>-<phase>.log 2>&1 &
+echo $! > benchmarks/tpcds-1tb/results/<RUN_ID>-<phase>.pid
 ```
 
-The driver logs one line per table as it finishes, with the row count and the elapsed time.
-Small dimension tables complete in seconds and the fact tables take the bulk of the time, so
-tell the user which table is in flight rather than implying steady progress.
-
-Data generation is skipped per table when a committed Parquet directory already exists, so a
-rerun after a failure picks up where it left off.
-
-## Phase 3: Load the lakehouse formats
+Then Wait with this loop. It returns after at most 8 minutes or when the process exits.
 
 ```bash
-./run.sh --phase load
+pid=$(cat benchmarks/tpcds-1tb/results/<RUN_ID>-<phase>.pid); log=benchmarks/tpcds-1tb/results/<RUN_ID>-<phase>.log
+bound=$((SECONDS + 8*60))
+while kill -0 "$pid" 2>/dev/null && [ "$SECONDS" -lt "$bound" ]; do sleep 60; done
+kill -0 "$pid" 2>/dev/null && echo "still running" || echo "exited"
+tail -n 15 "$log"
 ```
 
-This builds the Hudi and Iceberg copies from the Parquet dataset. It is skipped entirely when
-the user chose Parquet only.
+Between runs of the loop, give the user one or two sentences built from the tail. Use the
+progress lines in the fact table. Say which table or query is in flight rather than implying
+steady progress; dimension tables finish in seconds and fact tables take the bulk of the time.
+If you want a finer view, resolve the driver pod with
+`kubectl get pods -n <NAMESPACE> -l benchmark=tpcds --no-headers` and run
+`kubectl logs <pod> -n <NAMESPACE> --tail=5`.
 
-## Phase 4: Queries
+Phase notes:
+
+- **datagen.** At 1 TB it writes roughly 300 GB of Parquet and typically runs for a few hours.
+  Tables with a committed `_SUCCESS` marker are skipped, so a rerun resumes.
+- **load.** Builds the Hudi and Iceberg copies from the Parquet. Skipped when the user chose
+  Parquet only.
+- **query.** Every requested engine against every requested format, so six jobs at the default
+  settings. A query that fails on one engine is excluded from the comparison on both, which
+  keeps a failure from flattering either side.
+- **merge.** Each engine first builds its own copy of the target, untimed, then runs the
+  rounds. Every round prints the validation line from the fact table. A `FAIL` means the merge
+  did not produce the expected table state. Surface it at once and never present that round's
+  time as a result. A fast merge that lost rows is not a fast merge.
+
+When the process has exited, quote the last `run.sh` line from the log. `run.sh` prints
+`<job>: COMPLETED after <n>s` on success and `<job>: FAILED after <n>s` or a `TIMED OUT` line
+otherwise. Report the line you saw.
+
+### Step 6: Report
 
 ```bash
-./run.sh --phase query
+cd benchmarks/tpcds-1tb && ./run.sh --phase report --run-id <RUN_ID>
 ```
 
-This is the headline comparison: the same 99 queries, on the same data, on both engines. It
-runs every requested engine against every requested format, so six combinations at the
-default settings.
+Read `results/<RUN_ID>/summary.md`. Present the findings yourself, leading with the number
+that answers the user's question:
 
-While each job runs, report progress by counting completed queries in the driver log. The
-runner prints one line per query with its elapsed time. Tell the user roughly where it is,
-for example "Quanton on Parquet, 61 of 99 queries done".
-
-If a query fails on one engine, note it and keep going. The report excludes any query that
-did not succeed on both sides, which keeps a failure from flattering either engine.
-
-## Phase 5: Lake-loader merges
-
-```bash
-./run.sh --phase merge
-```
-
-This is the part a query benchmark misses. Each round builds a change batch of updates to
-existing rows plus brand-new rows, stages it as Parquet, then merges it into the target.
-Hudi is merged through its `upsert` write operation and Iceberg through `MERGE INTO`, because
-those are each format's native loader path.
-
-Each engine merges into its own copy of the target, prepared at the start of its run and
-reported separately from the merge rounds. Say so if the user asks why the merge phase begins
-with a long untimed step.
-
-Every round is validated. Watch for the per-round line in the log:
-
-```
-merge 412.3s | rows 2885700000 (expected 2885700000) | probe mismatches 0 | PASS
-```
-
-A `FAIL` means the merge did not produce the expected table state. Surface it immediately and
-do not present that round's timing as a result. A fast merge that lost rows is not a fast
-merge.
-
-## Phase 6: Report
-
-```bash
-./run.sh --phase report
-```
-
-This writes `results/<run-id>/summary.md` and prints it. Then present the findings to the
-user yourself. Lead with the number that answers their question:
-
-- Total and geometric-mean speedup per format.
+- Total and geometric-mean speedup per format, with the direction stated. If OSS Spark is
+  faster on a format, write that.
 - How many of the 99 queries each engine won.
 - The best and worst queries, both named.
 - Mean merge time per format, and whether every round validated.
 
-Be straight about the results. If Quanton loses on a query or a format, say so and say by how
-much. A benchmark the user cannot trust is worth nothing to them, and they will run it again
-themselves. If a phase did not finish, say which numbers are missing rather than presenting a
-partial run as a complete one.
+If a phase did not finish, name the numbers that are missing. Do not present a partial run as
+complete.
 
 ## Rerunning and cleaning up
 
-Phases are independent and safe to repeat. The expensive artefacts persist in object storage,
-so a rerun of the query phase costs minutes of setup rather than hours of generation.
+Phases are independent and safe to repeat with the same `--run-id`. The expensive artefacts
+live in object storage, so a query rerun costs minutes rather than hours.
 
-To clear the Kubernetes objects from a run:
+To clear the Kubernetes objects from a run, after a yes:
 
 ```bash
-kubectl delete sparkapplication,quantonsparkapplication -n <namespace> -l benchmark=tpcds
+kubectl delete sparkapplication,quantonsparkapplication -n <NAMESPACE> -l benchmark=tpcds
 ```
 
-Object storage is not touched by that. Tell the user what is still there and roughly how much
-it is, so they can decide. Never delete their data without being asked.
+That does not touch object storage. Tell the user what is still under `STORAGE_URI` and
+roughly how much. Never delete their data without being asked.
 
-## Error handling
+## Failure handling
 
-- **Pods Pending.** The executor shape does not fit the cluster. Run
-  `kubectl describe pod <pod>` and read the scheduling events back. Propose a smaller shape.
-  This is a capacity problem, not an engine problem.
+Name the evidence, then the category. Capacity, credentials, image architecture, and registry
+access are environment problems.
+
+- **Pods `Pending`.** The executor shape does not fit. Run `kubectl describe pod <pod> -n <NAMESPACE> | tail -20`,
+  quote the scheduling event, and propose a smaller `EXECUTOR_CORES` and `EXECUTOR_MEMORY`.
 - **Access denied on object storage.** The driver service account cannot reach the bucket.
-  Name the exact path that failed. Preflight cannot catch this, so it surfaces at the first
-  write.
-- **`ClassNotFoundException` for Hudi on the Quanton side.** The Quanton engine image bundles
-  the Iceberg runtime but not Hudi. Either the pods need to reach Maven Central, or
-  `QUANTON_HUDI_JARS` in `bench.env` should point at a Hudi bundle jar in object storage.
-- **Iceberg class conflicts on the Quanton side.** The suite already keeps the classpath
-  narrow. If the user added Iceberg through `spark.jars.packages` in `EXTRA_SPARK_CONF`,
-  that second copy is the cause.
-- **Executor lost, or out of memory, during datagen.** Each concurrent `dsdgen` chunk needs
-  local disk. Raise `DSDGEN_PARALLEL` to make chunks smaller, or raise `LOCAL_DIR_SIZE`.
-- **A phase times out.** `PHASE_TIMEOUT` defaults to 12 hours. Results are still collected
-  from whatever the driver logged, so run the report phase before deciding what to retry.
-
-Always separate a cluster problem from an engine problem when you explain a failure. Capacity,
-credentials, image architecture, and registry access are environment problems. Say which one
-you are looking at.
+  Quote the exact path from the log. Preflight cannot catch this; it surfaces at the first write.
+- **`ClassNotFoundException` for Hudi on the Quanton side.** The Quanton image bundles Iceberg
+  but not Hudi. Either the pods need Maven Central, or set `QUANTON_HUDI_JARS` in `bench.env`
+  to a Hudi bundle jar in object storage.
+- **Iceberg class conflicts on the Quanton side.** The suite keeps the classpath narrow. If
+  `EXTRA_SPARK_CONF` adds Iceberg through `spark.jars.packages`, that second copy is the cause.
+- **Executor lost or out of memory during datagen.** Each `dsdgen` chunk needs local disk.
+  Raise `DSDGEN_PARALLEL` to make chunks smaller, or raise `LOCAL_DIR_SIZE`.
+- **A phase times out.** `PHASE_TIMEOUT` defaults to 12 hours. Run the report phase before
+  deciding what to retry; results are collected from whatever the driver logged.
+- **`exec format error` in a pod.** The image architecture does not match the nodes. Rebuild
+  with the other `--platform`.
 
 ## Related skills
 
-- `/run-tpcds-benchmark` runs the same benchmark on minikube at 1 GB to 10 GB, on Parquet
-  only. Point the user there when they want a laptop-scale demo rather than a cluster-scale
-  validation.
-- `/run-merge-into` runs a small correctness demo of `MERGE INTO` on Hudi and Iceberg. Point
-  the user there when a merge fails validation here and they want a minimal reproduction.
+- `run-tpcds-benchmark` runs the same comparison on minikube at 1 GB to 10 GB on Parquet only.
+- `run-merge-into` is a small `MERGE INTO` correctness demo, useful as a minimal reproduction
+  when a merge round fails validation here.
