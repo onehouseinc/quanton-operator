@@ -1,0 +1,42 @@
+name: Skills Check
+
+on:
+  pull_request:
+    paths:
+      - '.agents/**'
+      - '.claude/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'scripts/agent/**'
+      - 'scripts/test_agent_scripts.py'
+      - '.github/workflows/skills-check.yaml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/**'
+      - '.claude/**'
+      - 'scripts/agent/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: pip install pyyaml pytest
+
+      - name: Validate skills
+        run: python3 scripts/agent/validate_skills.py
+
+      - name: Check shell syntax
+        run: bash -n scripts/agent/*.sh
+
+      - name: Run helper script tests
+        run: cd scripts && pytest test_agent_scripts.py -v
