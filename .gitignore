@@ -1,3 +1,8 @@
 onehouse-values.yaml
 benchmarks/results/*
 .idea/*
+benchmarks/tpcds-1tb/bench.env
+benchmarks/tpcds-1tb/results/*
+!benchmarks/tpcds-1tb/results/.gitkeep
+__pycache__/
+*.pyc

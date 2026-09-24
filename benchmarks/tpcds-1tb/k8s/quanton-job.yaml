@@ -1,0 +1,68 @@
+# QuantonSparkApplication template for the Quanton side of the TPC-DS benchmark.
+#
+# The body under sparkApplicationSpec is deliberately identical to k8s/spark-job.yaml. The
+# same script, the same arguments, the same data, and the same resources run on both sides,
+# so any difference in the results comes from the engine rather than from the submission.
+#
+# The image field names the OSS image here as well. The Quanton operator replaces it with
+# the engine image configured at install time in onehouseConfig.quantonSparkImage, so the
+# benchmark image only has to supply the scripts, not the engine.
+apiVersion: quantonsparkoperator.onehouse.ai/v1beta2
+kind: QuantonSparkApplication
+metadata:
+  name: ${APP_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    benchmark: tpcds
+    benchmark-run: "${RUN_ID}"
+spec:
+  sparkApplicationSpec:
+    type: Python
+    pythonVersion: "3"
+    mode: cluster
+    image: "${BENCH_IMAGE}"
+    imagePullPolicy: ${IMAGE_PULL_POLICY}
+    imagePullSecrets: ${IMAGE_PULL_SECRETS}
+    mainApplicationFile: "local:///mnt/scripts/${MAIN_SCRIPT}"
+    arguments: ${ARGUMENTS}
+    sparkVersion: "${SPARK_VERSION}"
+    restartPolicy:
+      type: Never
+    sparkConf: ${SPARK_CONF}
+    volumes:
+      - name: scripts
+        configMap:
+          name: ${SCRIPTS_CONFIGMAP}
+      - name: sql-tpcds
+        configMap:
+          name: ${SQL_CONFIGMAP}
+      - name: spark-local-dir-1
+        emptyDir:
+          sizeLimit: ${LOCAL_DIR_SIZE}
+    driver:
+      cores: ${DRIVER_CORES}
+      memory: "${DRIVER_MEMORY}"
+      serviceAccount: ${SERVICE_ACCOUNT}
+      nodeSelector: ${NODE_SELECTOR}
+      labels:
+        version: "${SPARK_VERSION}"
+        benchmark: tpcds
+      env: ${EXTRA_ENV}
+      volumeMounts:
+        - { name: scripts, mountPath: /mnt/scripts }
+        - { name: sql-tpcds, mountPath: /mnt/sql/tpcds }
+        - { name: spark-local-dir-1, mountPath: /spark-local-dir-1 }
+    executor:
+      cores: ${EXECUTOR_CORES}
+      coreLimit: "${EXECUTOR_CORE_LIMIT}"
+      instances: ${EXECUTOR_INSTANCES}
+      memory: "${EXECUTOR_MEMORY}"
+      nodeSelector: ${NODE_SELECTOR}
+      labels:
+        version: "${SPARK_VERSION}"
+        benchmark: tpcds
+      env: ${EXTRA_ENV}
+      volumeMounts:
+        - { name: scripts, mountPath: /mnt/scripts }
+        - { name: sql-tpcds, mountPath: /mnt/sql/tpcds }
+        - { name: spark-local-dir-1, mountPath: /spark-local-dir-1 }

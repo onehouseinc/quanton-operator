@@ -1,0 +1,66 @@
+# SparkApplication template for the OSS Apache Spark side of the TPC-DS benchmark, and for
+# the shared datagen and load phases.
+#
+# run.sh substitutes the placeholders below from the environment. Values that are lists or
+# maps are substituted as YAML flow syntax, ["a","b"] and {"k":"v"}, so a single line covers
+# them and the indentation can never drift.
+#
+# To submit by hand, render it with run.sh --dry-run and pipe that to kubectl apply -f -.
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: ${APP_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    benchmark: tpcds
+    benchmark-run: "${RUN_ID}"
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "${BENCH_IMAGE}"
+  imagePullPolicy: ${IMAGE_PULL_POLICY}
+  imagePullSecrets: ${IMAGE_PULL_SECRETS}
+  mainApplicationFile: "local:///mnt/scripts/${MAIN_SCRIPT}"
+  arguments: ${ARGUMENTS}
+  sparkVersion: "${SPARK_VERSION}"
+  restartPolicy:
+    type: Never
+  sparkConf: ${SPARK_CONF}
+  volumes:
+    - name: scripts
+      configMap:
+        name: ${SCRIPTS_CONFIGMAP}
+    - name: sql-tpcds
+      configMap:
+        name: ${SQL_CONFIGMAP}
+    - name: spark-local-dir-1
+      emptyDir:
+        sizeLimit: ${LOCAL_DIR_SIZE}
+  driver:
+    cores: ${DRIVER_CORES}
+    memory: "${DRIVER_MEMORY}"
+    serviceAccount: ${SERVICE_ACCOUNT}
+    nodeSelector: ${NODE_SELECTOR}
+    labels:
+      version: "${SPARK_VERSION}"
+      benchmark: tpcds
+    env: ${EXTRA_ENV}
+    volumeMounts:
+      - { name: scripts, mountPath: /mnt/scripts }
+      - { name: sql-tpcds, mountPath: /mnt/sql/tpcds }
+      - { name: spark-local-dir-1, mountPath: /spark-local-dir-1 }
+  executor:
+    cores: ${EXECUTOR_CORES}
+    coreLimit: "${EXECUTOR_CORE_LIMIT}"
+    instances: ${EXECUTOR_INSTANCES}
+    memory: "${EXECUTOR_MEMORY}"
+    nodeSelector: ${NODE_SELECTOR}
+    labels:
+      version: "${SPARK_VERSION}"
+      benchmark: tpcds
+    env: ${EXTRA_ENV}
+    volumeMounts:
+      - { name: scripts, mountPath: /mnt/scripts }
+      - { name: sql-tpcds, mountPath: /mnt/sql/tpcds }
+      - { name: spark-local-dir-1, mountPath: /spark-local-dir-1 }

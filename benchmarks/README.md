@@ -2,6 +2,11 @@
 
 Compares OSS Apache Spark vs Quanton on Kubernetes using the TPC-DS read benchmark — 99 TPC-DS queries on Parquet.
 
+> Running on a real cluster rather than minikube? See [`tpcds-1tb/`](tpcds-1tb/README.md).
+> That suite generates TPC-DS at 1 TB into object storage, loads it into Parquet, Hudi and
+> Iceberg, runs the 99 queries on each, and adds a lake-loader merge benchmark that upserts
+> change batches into a fact table and validates every round.
+
 ## Overview
 
 1. **Generates TPC-DS data** (default SF=1 / 1GB) using `dsdgen` into Parquet format
