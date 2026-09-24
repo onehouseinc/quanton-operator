@@ -1,10 +1,10 @@
 ---
 name: run-tpcds-benchmark
 description: Run the TPC-DS read benchmark on minikube, comparing OSS Apache Spark against Quanton on Parquet at scale factor 1 or 10, with interactive configuration, live progress from the driver logs, and a per-query comparison table and chart. Optionally enables the in-driver Spark Agent sidebar (Chat, Monitor, Diagnostics, Savings, Settings) on the Quanton run. Use whenever the user wants to benchmark, compare, or demo Quanton versus Spark locally, run TPC-DS on a laptop, or see per-query speedups, even if they do not say "TPC-DS".
-compatibility: Requires minikube, kubectl, helm, docker, and python3 with PyYAML. A minikube cluster with the Spark Operator and the Quanton Operator installed. About 14 GB of RAM and 50 GB of disk for scale factor 1. matplotlib is optional for the PNG chart.
+compatibility: Requires minikube, kubectl, helm, docker, and python3 with PyYAML. A minikube cluster with the Spark Operator and the Quanton Operator installed. About 14 GB of RAM and 50 GB of disk for scale factor 1. matplotlib is optional for the PNG chart. kubectl, helm, and docker need network access from the agent's shell.
 allowed-tools: Bash, Read, Write, AskUserQuestion
 metadata:
-  version: "2"
+  version: "3"
 ---
 
 # Run the TPC-DS benchmark: OSS Spark versus Quanton on minikube
@@ -15,39 +15,20 @@ follows its five phases and diverges only where the user's answers require it: r
 changing the executor shape, and enabling the Spark Agent. Explain each phase in one sentence
 before you start it. Describe a result only after the command that proves it has printed.
 
-## How to read this skill
-
-This skill is written for any agent runtime. It names actions, not tools. Map them like this:
-
-| Action | What to do in your runtime |
-|---|---|
-| **Run** | Execute the command with your shell tool. Read the whole output before you continue. |
-| **Read** | Open the file with your file-read tool. |
-| **Ask** | Put the question to the user and end your turn. Use a structured-choice tool if you have one, otherwise plain text. |
-| **Wait** | Use the bounded loop the step gives you. Set its bound below your runtime's command timeout. Never sleep or poll in your own turns. |
-
-## Ground rules
-
-1. **Report only what a command printed.** Quote the line that supports each claim. If you did not see a value, say so.
-2. **One check per claim.** "Installed", "Running", "Completed", and "PASS" each need command output that shows the word.
-3. **The fact table below is a plan, not the truth.** If a command contradicts it, trust the command, tell the user, and stop if the difference matters.
-4. **Every wait is bounded.** Never run a command that can block without a timeout. Do not use `kubectl logs -f`.
-5. **Ask before destructive or costly actions.** Deleting, overwriting, and submitting work to a paid cluster each need a fresh yes. A yes covers one action.
-6. **Never print secrets.** This includes `onehouse-values.yaml`, Kubernetes Secret data, and API keys.
-7. **Separate environment problems from engine problems**, and name the evidence for the split.
-8. **Do not guess names, phases, or numbers.** Get pod names from `kubectl get pods`. Get counts from `grep -c`.
+Follow the working rules in `AGENTS.md`. Helper scripts live in `scripts/agent/`. Shared
+failure cases live in `docs/troubleshooting.md`.
 
 Two rules specific to a benchmark:
 
-9. **Never predict the winner.** Do not write "notice this is faster" while a job runs. The
+1. **Never predict the winner.** Do not write "notice this is faster" while a job runs. The
    comparison exists only after both result files are on disk.
-10. **Never edit the checked-in manifests.** Patched copies go to a temporary directory.
+2. **Never edit the checked-in manifests.** Patched copies go to a temporary directory.
 
 ## Facts this skill relies on
 
 | Item | Value |
 |---|---|
-| Skill directory | `.claude/skills/run-tpcds-benchmark/` in the repository. `scripts/` and `references/` below are relative to it. |
+| Skill directory | `.agents/skills/run-tpcds-benchmark/` in the repository. `scripts/` and `references/` below are relative to it. |
 | Reference implementation | `benchmarks/run.sh`, flags `--scale-factor N`, `--timeout N`, `--force-datagen`. Read it if a step here is unclear. |
 | Namespace | `default` for every object |
 | PVC | `benchmarks/k8s/pvc.yaml`, name `tpcds-data`, mounted at `/data/tpcds` |
@@ -75,20 +56,17 @@ Two rules specific to a benchmark:
 Run:
 
 ```bash
-kubectl config current-context
-command -v minikube kubectl helm docker python3
+scripts/agent/check-cluster.sh --require-context minikube --require-charts spark-operator,quanton-operator --require-tools minikube,kubectl,helm,docker,python3
 python3 -c "import yaml; print('pyyaml ok')"
 minikube status 2>&1
-helm list -A -o json | python3 -c 'import json,sys; print("\n".join(f"{r[\"name\"]} {r[\"namespace\"]} {r[\"chart\"]}" for r in json.load(sys.stdin) if "spark-operator" in r["chart"] or "quanton-operator" in r["chart"]) or "no operator releases")'
 ```
 
-The context must be `minikube`. Every `kubectl apply` in this skill goes to the current
-context, and a benchmark submitted to a shared or production cluster is not recoverable by
-this skill. If the context is anything else, tell the user which context is active and stop.
-Switch only if the user asks you to.
-
-If a tool is missing or `pyyaml ok` did not print, name it and stop. If either operator chart
-is missing, name it, point to the `setup-and-run-example` skill, and stop.
+Continue only if the first command ends with `result: OK`. Every `kubectl apply` in this skill
+goes to the current context, and a benchmark submitted to a shared or production cluster is
+not recoverable by this skill. On `context check: FAIL`, tell the user which context is active
+and stop. Switch only if the user asks you to. On `tool <name>: MISSING` or a missing
+`pyyaml ok`, name it and stop. On `chart <name>: MISSING`, point to the
+`setup-and-run-example` skill and stop.
 
 ### Step 0.2: Ask for the scale factor
 
@@ -194,25 +172,18 @@ kubectl get pvc tpcds-data -n default
 Quote the PVC status line. `Bound` or `Pending` with a `WaitForFirstConsumer` event are both
 fine on minikube.
 
-## The wait loop used by Phases 2 to 4
+## The wait command used by Phases 2 to 4
 
-Set `kind`, `app`, and `progress_regex` per phase. The loop returns after at most 8 minutes or
-at a terminal state. Between runs, give the user one sentence built from the last line the
-loop printed. Run it again until a terminal state.
+Every Wait in Phases 2 to 4 is:
 
 ```bash
-kind=<sparkapplication|quantonsparkapplication>; app=<job-name>; ns=default
-progress_regex='<see phase>'; bound=$((SECONDS + 8*60))
-jp='{.status.applicationState.state}'; [ "$kind" = quantonsparkapplication ] && jp='{.status.phase}'
-while [ "$SECONDS" -lt "$bound" ]; do
-  st=$(kubectl get "$kind" "$app" -n "$ns" -o jsonpath="$jp" 2>/dev/null || true)
-  done_n=$(kubectl logs "${app}-driver" -n "$ns" 2>/dev/null | grep -cE "$progress_regex" || true)
-  last=$(kubectl logs "${app}-driver" -n "$ns" --tail=1 2>/dev/null || true)
-  echo "$(date +%T) state=${st:-<none>} progress=${done_n} last=${last}"
-  case "$(printf '%s' "$st" | tr '[:lower:]' '[:upper:]')" in COMPLETED|FAILED|SUBMISSION_FAILED) break ;; esac
-  sleep 30
-done
+scripts/agent/wait-for-app.sh --kind <sparkapplication|quantonsparkapplication> --name <job-name> --progress-regex '<see phase>' --max-seconds 480 --interval 30
 ```
+
+It prints one status line per 30 seconds with `phase=`, `driver=`, `progress=<matching log
+lines>`, and `last=<last log line>`, and exits 0 at a terminal state. If it exits 2 with
+`deadline ... passed`, give the user one sentence built from the last status line, then run it
+again.
 
 ## Phase 2: Data generation
 
@@ -223,7 +194,7 @@ regenerate over existing data.
 
 ```bash
 tmp=$(mktemp -d)
-python3 .claude/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
+python3 .agents/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
   --in benchmarks/k8s/datagen-job.yaml --out "$tmp/datagen.yaml" \
   --scale-factor <SF> --executor-instances <2 or 4> [--force-datagen]
 kubectl delete sparkapplication tpcds-datagen -n default --ignore-not-found=true
@@ -231,7 +202,7 @@ kubectl apply -f "$tmp/datagen.yaml"
 ```
 
 Show the user the change lines the script printed. Then Wait with
-`kind=sparkapplication app=tpcds-datagen progress_regex='rows written$'`. Report progress as
+`--kind sparkapplication --name tpcds-datagen --progress-regex 'rows written$'`. Report progress as
 "`<progress>` of 24 tables written; last line: `<last>`". `store_sales` is the largest table
 and takes the longest.
 
@@ -241,14 +212,14 @@ quote the count.
 ## Phase 3: OSS Spark baseline
 
 ```bash
-python3 .claude/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
+python3 .agents/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
   --in benchmarks/k8s/oss-spark-tpcds.yaml --out "$tmp/oss.yaml" \
   --scale-factor <SF> --executor-instances <n> --executor-cores <n> --executor-memory <m>
 kubectl delete sparkapplication oss-spark-tpcds -n default --ignore-not-found=true
 kubectl apply -f "$tmp/oss.yaml"
 ```
 
-Wait with `kind=sparkapplication app=oss-spark-tpcds progress_regex='^  q[0-9]+[a-z]?: [0-9.]+s \('`.
+Wait with `--kind sparkapplication --name oss-spark-tpcds --progress-regex '^  q[0-9]+[a-z]?: [0-9.]+s \('`.
 Once the log shows `Found <n> queries`, report progress as "`<progress>` of `<n>` queries done
 on OSS Spark". Count failures with `grep -cE '^  q[0-9]+[a-z]?: FAILED'` and mention them
 without stopping.
@@ -258,7 +229,7 @@ On a terminal state, quote the `Total:` line.
 ## Phase 4: Quanton run
 
 ```bash
-python3 .claude/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
+python3 .agents/skills/run-tpcds-benchmark/scripts/patch_manifest.py \
   --in benchmarks/k8s/quanton-tpcds-parquet.yaml --out "$tmp/quanton.yaml" \
   --scale-factor <SF> --executor-instances <n> --executor-cores <n> --executor-memory <m> \
   [--agent] [--await-termination] [--await-timeout <dur>]
@@ -269,13 +240,13 @@ kubectl apply -f "$tmp/quanton.yaml"
 If the operator was installed with `onehouseConfig.enableAIAgent=true`, the controller injects
 the same agent keys itself; passing them again is harmless.
 
-Wait with `kind=quantonsparkapplication app=quanton-tpcds-parquet` and the same
-`progress_regex` as Phase 3. Report progress the same way. Do not compare against the OSS
+Wait with `--kind quantonsparkapplication --name quanton-tpcds-parquet` and the same
+`--progress-regex` as Phase 3. Report progress the same way. Do not compare against the OSS
 numbers while it runs.
 
-**If the agent is enabled**, as soon as the loop shows the driver pod `Running`, Read
+**If the agent is enabled**, as soon as a status line shows `driver=Running`, Read
 `references/spark-agent-walkthrough.md` and follow it: port-forward in the background, give
-the user the URL, and keep the wait loop going between their questions.
+the user the URL, and keep running the wait command between their questions.
 
 On a terminal state, quote the `Total:` line. Stop the port-forward if you started one and
 await-termination is off.
@@ -303,7 +274,7 @@ Then run the comparison. It prints the table, the summary, and the log-scale cha
 writes `comparison.png` when matplotlib is installed:
 
 ```bash
-python3 .claude/skills/run-tpcds-benchmark/scripts/compare_results.py --results-dir benchmarks/results/sf_<SF> --png
+python3 .agents/skills/run-tpcds-benchmark/scripts/compare_results.py --results-dir benchmarks/results/sf_<SF> --png
 ```
 
 Show the user the script's output as printed. If a PNG was written, open it with your
@@ -336,23 +307,14 @@ how the numbers compare with the reference runs in `benchmarks/data/`.
 
 Name the evidence, then the category.
 
-- **Driver `Pending` for more than 2 minutes.** Run `kubectl describe pod <pod> -n default | tail -20`.
-  `Insufficient cpu` or `Insufficient memory` means the executor shape or the minikube size is
-  too small. `ErrImageNeverPull` on the datagen job means the image was built against a
-  different Docker daemon; rebuild after `eval "$(minikube docker-env)"`. A PVC still attached
-  to a previous pod resolves itself once that pod is gone. All of these are environment
-  problems.
 - **Query failures.** Some TPC-DS queries fail on one engine. The comparison script excludes
   them from both sides and names them. Report them; do not hide them.
-- **`SIGILL` or `signal 4` in a Quanton pod.** The native engine in the image does not match
-  the CPU. Run `uname -m` and quote the image the operator injected
-  (`kubectl get pod <pod> -n default -o jsonpath='{.spec.containers[0].image}'`). Images at
-  `release-v0.9.0-al2023` or later carry an aarch64 build; earlier ones carry only a Graviton
-  build. Report both facts. This is an image and hardware match problem.
 - **A job runs past the 2-hour `run.sh` default.** Ask before killing it. If killed, say the
   comparison is partial or absent.
 - **`patch_manifest.py` exits non-zero.** Quote its message. The manifest shape changed; Read
   the manifest and stop rather than patching by hand.
+- **Driver `Pending` for more than 2 minutes, `ErrImageNeverPull` on the datagen job, or
+  `SIGILL` in a Quanton pod.** Read the matching entry in `docs/troubleshooting.md`.
 
 ## Related skills
 

@@ -1,10 +1,10 @@
 ---
 name: run-rag-demo
 description: Run the RAG-on-the-lakehouse demo and the fine-tuning dataset demo on minikube. Parses 510 contract PDFs into Hudi tables on LANCE and PARQUET base files, embeds chunks, answers a question with cosine similarity joined to expert labels in one SQL statement, then exports a validated fine-tuning dataset. Use whenever the user wants to run, demo, or verify RAG, embeddings, vector search in SQL, document parsing, Lance tables, or fine-tuning data export with Quanton.
-compatibility: Requires kubectl, a minikube cluster with the Spark Operator and the Quanton Operator installed, and an operator configured with onehouseConfig.quantonSpark4Image (chart 2.0.6 or newer). Network access to download the corpus and Python packages on first run.
+compatibility: Requires kubectl, a minikube cluster with the Spark Operator and the Quanton Operator installed, and an operator configured with onehouseConfig.quantonSpark4Image (chart 2.0.6 or newer). Network access from the agent's shell to the cluster, and from the cluster to download the corpus and Python packages on first run.
 allowed-tools: Bash, Read, Write, AskUserQuestion
 metadata:
-  version: "2"
+  version: "3"
 ---
 
 # Run the RAG and fine-tuning demos
@@ -14,27 +14,8 @@ a question in SQL. The fine-tuning demo reads the tables the RAG demo wrote and 
 dataset. **The fine-tuning demo depends on the RAG demo's output.** Never run it against an
 empty PVC.
 
-## How to read this skill
-
-This skill is written for any agent runtime. It names actions, not tools. Map them like this:
-
-| Action | What to do in your runtime |
-|---|---|
-| **Run** | Execute the command with your shell tool. Read the whole output before you continue. |
-| **Read** | Open the file with your file-read tool. |
-| **Ask** | Put the question to the user and end your turn. Use a structured-choice tool if you have one, otherwise plain text. |
-| **Wait** | Use the bounded loop the step gives you. Set its bound below your runtime's command timeout. Never sleep or poll in your own turns. |
-
-## Ground rules
-
-1. **Report only what a command printed.** Quote the line that supports each claim. If you did not see a value, say so.
-2. **One check per claim.** "Installed", "Running", "Completed", and "PASS" each need command output that shows the word.
-3. **The fact table below is a plan, not the truth.** If a command contradicts it, trust the command, tell the user, and stop if the difference matters.
-4. **Every wait is bounded.** Never run a command that can block without a timeout. Do not use `kubectl logs -f`.
-5. **Ask before destructive or costly actions.** Deleting, overwriting, and submitting work to a paid cluster each need a fresh yes. A yes covers one action.
-6. **Never print secrets.** This includes `onehouse-values.yaml`, Kubernetes Secret data, and API keys.
-7. **Separate environment problems from engine problems**, and name the evidence for the split.
-8. **Do not guess names, phases, or numbers.** Get pod names from `kubectl get pods`. Get counts from `grep -c`.
+Follow the working rules in `AGENTS.md`. Helper scripts live in `scripts/agent/`. Shared
+failure cases live in `docs/troubleshooting.md`.
 
 ## Facts this skill relies on
 
@@ -45,6 +26,7 @@ This skill is written for any agent runtime. It names actions, not tools. Map th
 | App name | `quanton-rag-demo` | `quanton-finetune-demo` |
 | Expected driver pod | `quanton-rag-demo-driver` | `quanton-finetune-demo-driver` |
 | Arguments | `["/data/rag-demo", "400"]`; the second is the chunk cap, `0` means all | `["/data/rag-demo", ...]` |
+| Log prefix | `rag-demo` | `finetune-demo` |
 | Verdict line starts with | `[rag-demo] PASS —` | `[finetune-demo] PASS —` |
 | Blog it reproduces | https://quanton.dev/blog/rag-on-documents/ | https://quanton.dev/blog/fine-tuning-from-lakehouse-tables/ |
 
@@ -60,17 +42,18 @@ repository disagree.
 Run:
 
 ```bash
-kubectl config current-context
+scripts/agent/check-cluster.sh --require-context minikube --require-charts spark-operator,quanton-operator
 kubectl get configmap quanton-operator-config -n quanton-operator -o jsonpath='{.data.config\.json}' | python3 -c 'import json,sys; c=json.load(sys.stdin); print("quantonSpark4Image =", repr(c.get("quantonSpark4Image","")))'
 ```
 
-The context must be `minikube`. These manifests write to a PVC in `default` and are not meant
-for a shared cluster. If it is anything else, tell the user and stop.
+Continue only if the first command ends with `result: OK`. On `context check: FAIL`, tell the
+user which context is active and stop; these manifests write to a PVC in `default` and are not
+meant for a shared cluster. On `chart <name>: MISSING`, point the user to the
+`setup-and-run-example` skill and stop.
 
 If `quantonSpark4Image` prints an empty string, stop. Tell the user to set
 `onehouseConfig.quantonSpark4Image` in their operator values (chart 2.0.6 or newer) and
-upgrade the release. If the configmap is missing, the operator is not installed; point to the
-`setup-and-run-example` skill.
+upgrade the release.
 
 ### Step 2: Ask which demo and how many chunks
 
@@ -86,13 +69,12 @@ about an hour; a real cluster is a better fit than minikube).
 Run:
 
 ```bash
-kubectl get quantonsparkapplication quanton-rag-demo -n default -o jsonpath='{.status.phase}' 2>/dev/null; echo
-kubectl logs quanton-rag-demo-driver -n default 2>/dev/null | grep -F "[rag-demo] PASS" || echo "no RAG PASS line found"
+scripts/agent/app-verdict.sh --name quanton-rag-demo --prefix rag-demo
 kubectl get pvc rag-and-fine-tuning-demo-pvc -n default --no-headers 2>/dev/null || echo "PVC not found"
 ```
 
-Continue to fine-tuning only if the PVC exists and the `PASS` line printed. Otherwise tell
-the user the RAG demo has to run first and Ask whether to run it now.
+Continue to fine-tuning only if the first command printed `verdict: PASS` and the PVC exists.
+Otherwise tell the user the RAG demo has to run first and Ask whether to run it now.
 
 ### Step 4: Run the RAG demo
 
@@ -118,21 +100,12 @@ manifest changed shape. Read it and stop.
 
 ```bash
 kubectl apply -f <manifest-or-patched-path>
+scripts/agent/wait-for-app.sh --kind quantonsparkapplication --name quanton-rag-demo --log-prefix rag-demo --max-seconds 480 --interval 30
 ```
 
-```bash
-app=quanton-rag-demo; ns=default; bound=$((SECONDS + 8*60))
-while [ "$SECONDS" -lt "$bound" ]; do
-  phase=$(kubectl get quantonsparkapplication "$app" -n "$ns" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-  echo "$(date +%T) phase=${phase:-<none>}"
-  kubectl logs "${app}-driver" -n "$ns" --tail=3 2>/dev/null | grep -E "^\[rag-demo\]" || true
-  case "$(printf '%s' "$phase" | tr '[:lower:]' '[:upper:]')" in COMPLETED|FAILED) break ;; esac
-  sleep 30
-done
-```
-
-The loop returns after at most 8 minutes or at a terminal phase. Between runs, tell the user
-the phase and the last `[rag-demo]` line you saw. Run it again until a terminal phase.
+The wait script prints one status line per 30 seconds with the last `[rag-demo]` marker and
+exits 0 at a terminal phase. If it exits 2 with `deadline ... passed`, tell the user the phase
+and the marker you saw in one line, then run it again.
 
 3. Check the deterministic routing table. Run:
 
@@ -153,19 +126,22 @@ present the run as complete. Ask whether to delete the PVC and rerun.
 4. Read the verdict:
 
 ```bash
-kubectl logs quanton-rag-demo-driver -n default | grep -F "[rag-demo] PASS" || echo "no PASS line"
+scripts/agent/app-verdict.sh --name quanton-rag-demo --prefix rag-demo
 ```
+
+Quote the marker lines verbatim. The demo passed only if the script printed `verdict: PASS`.
 
 ### Step 5: Run the fine-tuning demo
 
 ```bash
 kubectl apply -f examples/rag-and-fine-tuning/quanton-finetune-demo.yaml
+scripts/agent/wait-for-app.sh --kind quantonsparkapplication --name quanton-finetune-demo --log-prefix finetune-demo --max-seconds 480 --interval 30
 ```
 
-Wait with the same loop, `app=quanton-finetune-demo` and prefix `[finetune-demo]`. Then:
+Then:
 
 ```bash
-kubectl logs quanton-finetune-demo-driver -n default | grep -F "[finetune-demo] PASS" || echo "no PASS line"
+scripts/agent/app-verdict.sh --name quanton-finetune-demo --prefix finetune-demo
 kubectl logs quanton-finetune-demo-driver -n default | grep -A12 "_manifest.json"
 ```
 
@@ -202,10 +178,7 @@ Quote each demo's `PASS —` line verbatim. If a demo has no `PASS` line, the re
 - **`NameError: name 'torch' is not defined` in a `mapInPandas` task.** A Python worker
   imported `transformers` before the install finished. Spark retries the task. If every attempt
   fails, compare the ConfigMap script with `rag_demo.py` on disk.
-- **`Evicted pod: Underutilized`.** Karpenter, not minikube. Add
-  `spark.kubernetes.driver.annotation.karpenter.sh/do-not-disrupt: "true"`.
-- **`No object store provider found for scheme: 's3a'`.** Lance uses its own object-store layer
-  and does not know `s3a`. Use `s3://` and set `fs.s3.impl=org.apache.hadoop.fs.s3a.S3AFileSystem`.
-- **Phase `Failed` with no marker lines.** Run `kubectl logs <driver-pod> -n default --tail=80`
-  and quote the first `Exception` or `Caused by` line. An image pull error is an environment
-  problem; a Python traceback inside the script is a demo problem.
+- **Phase `Failed` with no marker lines, an `Evicted pod: Underutilized` event, or
+  `No object store provider found for scheme: 's3a'`.** Read the matching entry in
+  `docs/troubleshooting.md`. An image pull error is an environment problem; a Python traceback
+  inside the script is a demo problem.

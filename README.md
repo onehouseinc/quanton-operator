@@ -109,30 +109,37 @@ python scripts/transform.py -input my-spark-app.yaml -output my-quanton-app.yaml
 
 The tool validates the input and rewrites `apiVersion`, `kind`, and nests `spec` under `spec.sparkApplicationSpec`. See [scripts/INSTRUCTIONS.md](scripts/INSTRUCTIONS.md) for details.
 
-## Claude Code
+## Agent skills (Claude Code and Codex)
 
-If you have [Claude Code](https://claude.com/claude-code) installed, you can set up and demo Quanton interactively from the terminal. The repo ships with [skills](.claude/skills/) (slash commands) that automate the full setup, demo, benchmarking, and teardown workflows.
+The repo ships with [skills](.agents/skills/) that automate the setup, demo, benchmarking, and
+teardown workflows from an agent in your terminal. They are written in the open Agent Skills
+format and live once under `.agents/skills/`; `.claude/skills/` holds symlinks to them, so
+[Claude Code](https://claude.com/claude-code) and [Codex](https://developers.openai.com/codex)
+load the same files.
 
-Start Claude Code in the repo root:
+Start either agent in the repo root, then invoke a skill by name or describe what you want:
 
 ```bash
-claude
+claude   # then /setup-and-run-example
+codex    # then $setup-and-run-example
 ```
-
-Then use any of the skills:
-
 
 | Skill                    | What it does                                                                                                                                                                                                                                                |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/setup-and-run-example` | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                                                          |
-| `/run-tpcds-benchmark`   | Runs the TPC-DS read benchmark (99 queries on Parquet) on minikube comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. Optional: enables the in-driver **Spark Agent** sidebar (Chat / Monitor / Diagnostics / Savings / Settings) on the Quanton run so you can interact with it live while the benchmark executes.                                       |
-| `/run-rag-demo`          | Runs the RAG-on-the-lakehouse and fine-tuning demos on minikube — parses 510 contract PDFs into Hudi tables on LANCE and PARQUET base files, embeds chunks, answers a question in one SQL statement, then exports a validated fine-tuning dataset.                              |
-| `/run-clustering`        | Runs the Hudi or Iceberg clustering demo on minikube — writes a table with a complex (Struct/Array/Map/nested) schema, forces a many-tiny-files layout, then triggers the format's native clustering procedure with `spark.quanton.clustering.accelerate=true` and verifies it succeeded. |
-| `/run-merge-into`        | Runs the Hudi or Iceberg `MERGE INTO` demo on minikube — creates a `customers` table, inserts 10 rows, runs `MERGE INTO` with 3 updates + 3 inserts, and verifies the final state (`10 -> 13 rows, 3 'vip'`).                                                |
-| `/clean-uninstall`       | Fully removes the Quanton Operator Helm release, cleans up secrets it created across namespaces, and removes the CRD.                                                                                                                                       |
+| `setup-and-run-example`  | Sets up minikube, installs Spark Operator + Quanton Operator, and runs a sample SparkPi job end-to-end. Walks you through each step interactively.                                                                                                          |
+| `run-tpcds-benchmark`    | Runs the TPC-DS read benchmark (99 queries on Parquet) on minikube comparing OSS Spark vs Quanton. Asks you for scale factor and configuration, gives live progress updates, and produces a per-query comparison table and chart. Optional: enables the in-driver **Spark Agent** sidebar (Chat / Monitor / Diagnostics / Savings / Settings) on the Quanton run so you can interact with it live while the benchmark executes.                                       |
+| `run-rag-demo`           | Runs the RAG-on-the-lakehouse and fine-tuning demos on minikube — parses 510 contract PDFs into Hudi tables on LANCE and PARQUET base files, embeds chunks, answers a question in one SQL statement, then exports a validated fine-tuning dataset.                              |
+| `run-demo`               | Runs one of the small correctness demos on Hudi or Iceberg: `merge-into` (creates a `customers` table, inserts 10 rows, runs `MERGE INTO` with 3 updates + 3 inserts, verifies `10 -> 13 rows, 3 'vip'`) or `clustering` (writes a table with a nested Struct/Array/Map schema, forces many tiny files, runs the format's native clustering procedure with `spark.quanton.clustering.accelerate=true`, verifies the result). |
+| `clean-uninstall`        | Fully removes the Quanton Operator Helm release, cleans up secrets it created across namespaces, and removes the CRD. Invoked by name only.                                                                                                                 |
 
-
-All skills check the active kubectl context and the prerequisites first, report only what the commands printed, ask before any destructive or costly step, and give you progress updates as jobs run. They are written in the open Agent Skills format, so other agent runtimes can load them from `.claude/skills/` as well; see `.claude/skills/README.md` for the conventions. You will need `onehouse-values.yaml` (from the [Onehouse console](https://cloud.onehouse.ai)) to install the Quanton Operator.
+All skills check the active kubectl context and the prerequisites first, report only what the
+commands printed, ask before any destructive or costly step, and give you progress updates as
+jobs run. The shared rules live in [AGENTS.md](AGENTS.md), the helper scripts the skills call
+live in [scripts/agent/](scripts/agent/), and the common failure cases live in
+[docs/troubleshooting.md](docs/troubleshooting.md). See
+[.agents/skills/README.md](.agents/skills/README.md) for the authoring conventions. You will
+need `onehouse-values.yaml` (from the [Onehouse console](https://cloud.onehouse.ai)) to
+install the Quanton Operator.
 
 ## Benchmarks
 
