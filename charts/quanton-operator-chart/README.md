@@ -68,7 +68,7 @@ Key parameters:
 | `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `true` |
 | `quantonOperator.jobNamespaces` | Namespaces where Spark jobs run | `["default"]` |
 | `quantonOperator.replicas` | Number of operator replicas | `1` |
-| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.6` |
+| `quantonOperator.image` | Operator container image | `dist.onehouse.ai/onehouseai/quanton-controller:2.0.7` |
 
 ## Chart Components
 
