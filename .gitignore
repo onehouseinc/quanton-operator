@@ -1,3 +1,6 @@
 onehouse-values.yaml
 benchmarks/results/*
 .idea/*
+examples/spark-ui-profiler-demo/demo.env
+examples/spark-ui-profiler-demo/.artifacts/
+__pycache__/
