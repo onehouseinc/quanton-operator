@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Profile one Spark application from the Spark History Server (or a live Spark UI).
 
-The script reads the public Spark REST API (/api/v1, Spark 3.x) and writes the facts a data
+The script reads the public Spark REST API (/api/v1, Spark 3 and 4) and writes the facts a data
 engineer needs to find out where the run time went:
 
   * a wall-clock timeline: which jobs and stages ran when, and the gaps in between where no
@@ -444,7 +444,7 @@ def executor_profile(executors: List[Dict[str, Any]], app_start: Optional[float]
             "peak_execution_bytes": (peak.get("OnHeapExecutionMemory") or 0) + (peak.get("OffHeapExecutionMemory") or 0),
             "added_s": (added - app_start) / 1000 if added and app_start else None,
             "removed_s": (removed - app_start) / 1000 if removed and app_start else None,
-            "remove_reason": e.get("removeReason"),
+            "remove_reason": " ".join((e.get("removeReason") or "").split()) or None,
         })
     return out
 
@@ -796,7 +796,8 @@ def collect(base: str, app: Optional[str], ui_base: Optional[str], top_stages: i
 
     # --- name each stage by the operators that ran in it (from the detailed SQL executions)
     skip_ops = ("WholeStageCodegen", "InputAdapter", "InputIterator", "ColumnarToRow", "RowToColumnar", "VeloxColumnarToRow",
-                "VeloxResizeBatches", "AdaptiveSparkPlan", "AQEShuffleRead", "ReusedExchange", "Project", "Filter", "Subquery")
+                "VeloxResizeBatches", "AdaptiveSparkPlan", "AQEShuffleRead", "ReusedExchange", "Project", "Filter", "Subquery",
+                "ResultQueryStage", "ShuffleQueryStage", "BroadcastQueryStage", "TableCacheQueryStage")
     stage_ops: Dict[int, List[str]] = {}
     for x in sql_rows:
         for o in x.get("operators", []):
@@ -806,7 +807,7 @@ def collect(base: str, app: Optional[str], ui_base: Optional[str], top_stages: i
             short = re.sub(r"ExecTransformer|Transformer|Exec\b", "", name.split(" (")[0])[:48]
             for sid in o["stages"]:
                 lst = stage_ops.setdefault(sid, [])
-                if short not in lst and len(lst) < 8:
+                if short not in lst and len(lst) < 5:
                     lst.append(short)
     for r in stage_rows:
         r["operators"] = stage_ops.get(r["stage_id"], [])
@@ -946,6 +947,7 @@ pre { background: var(--code); border: 1px solid var(--line); border-radius: 4px
 """
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+MAX_JOBS = 10                 # jobs shown in the timeline and the jobs table (plus any job with a critical stage)
 NO_SIGNAL = "<span class='ok'>no signal</span>"
 CRITICAL_SHARE = 0.8          # stages shown: the longest ones until they cover this share of stage time
 MAX_CRITICAL_STAGES = 6
@@ -984,13 +986,24 @@ def critical_stages(facts: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
+def shown_jobs(facts: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Every job when there are few; otherwise the longest ones and those holding a critical-path stage."""
+    jobs = facts["jobs"]
+    if len(jobs) <= MAX_JOBS + 3:
+        return jobs
+    crit = {s["stage_id"] for s in critical_stages(facts)}
+    keep = {j["job_id"] for j in sorted(jobs, key=lambda j: -(j["duration_ms"] or 0))[:MAX_JOBS]}
+    keep |= {j["job_id"] for j in jobs if set(j["stages_run"]) & crit}
+    return [j for j in jobs if j["job_id"] in keep]
+
+
 def render_timeline(facts: Dict[str, Any]) -> str:
     e = html.escape
     dur = facts["app"]["duration_ms"] or 1
     stages = facts["stages"]
     top_wall = max((s["wall_ms"] for s in stages), default=0)
     out = ["<div class='scroll'><table><tr><th>Job</th><th style='width:70%'>Stages over the run</th><th>Duration</th></tr>"]
-    for j in facts["jobs"]:
+    for j in shown_jobs(facts):
         bars = []
         for sid in j["stages_run"]:
             s = next((x for x in stages if x["stage_id"] == sid), None)
@@ -1057,9 +1070,15 @@ def render_html(facts: Dict[str, Any], analysis: str) -> str:
 
     # ---- jobs -> stages -> sql
     out.append("<h2 id='jobs'>Jobs, their stages, and the SQL execution they belong to</h2>")
+    jobs = shown_jobs(facts)
+    hidden = [j for j in facts["jobs"] if j not in jobs]
+    if hidden:
+        out.append(f"<p class='sub'>{len(facts['jobs'])} jobs in this application; the timeline and the table show the {len(jobs)} that "
+                   f"hold the critical-path stages or ran longest. The other {len(hidden)} ran {fmt_ms(sum(j['duration_ms'] or 0 for j in hidden))} "
+                   f"together and are in <a href='{e(ui)}/jobs/'>the Jobs tab</a>.</p>")
     out.append("<div class='scroll'><table><tr><th>Job</th><th>Description</th><th>SQL</th><th>At</th><th>Duration</th>"
                "<th>Stages run (active time, tasks)</th><th>Skipped</th></tr>")
-    for j in facts["jobs"]:
+    for j in jobs:
         parts = []
         for sid in j["stages_run"]:
             s = sby[sid]

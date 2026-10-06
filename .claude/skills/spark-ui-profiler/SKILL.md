@@ -28,7 +28,7 @@ Ask for whichever is missing:
 python3 <skill-dir>/profile_spark_app.py --url <base-url> --app <app-id> --json facts.json
 ```
 
-Standard library only, Spark 3.x REST API (`/api/v1`), a few seconds per application. Read
+Standard library only, the Spark REST API (`/api/v1`, Spark 3 and 4), a few seconds per application. Read
 `facts.json` in full before writing anything. It holds:
 
 | Key | What it is | Spark UI tab it mirrors |
