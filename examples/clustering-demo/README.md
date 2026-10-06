@@ -88,5 +88,6 @@ kubectl delete pvc quanton-hudi-clustering-demo-pvc quanton-iceberg-clustering-d
   rather than deleting them on disk. The Hudi demo's assertion is on
   `.replacecommit` count, not on parquet-file count.
 
-- **Trigger this demo via Claude Code:** run `/run-clustering` — see
+- **Trigger this demo via an AI coding agent:** run `/run-clustering` in Claude Code
+  or `$run-clustering` in Codex — see
   [`../../.claude/skills/run-clustering/SKILL.md`](../../.claude/skills/run-clustering/SKILL.md).

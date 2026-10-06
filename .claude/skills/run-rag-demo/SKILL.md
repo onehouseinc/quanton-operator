@@ -23,7 +23,7 @@ missing.
 
 ## Phase 0: Interactive configuration
 
-Use AskUserQuestion. Keep it short.
+Ask the user with your agent's structured-question tool if it has one (for example `AskUserQuestion` in Claude Code); otherwise ask in plain text and wait for the reply. Keep it short.
 
 ### Q1: Which demo?
 

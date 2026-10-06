@@ -109,17 +109,18 @@ python scripts/transform.py -input my-spark-app.yaml -output my-quanton-app.yaml
 
 The tool validates the input and rewrites `apiVersion`, `kind`, and nests `spec` under `spec.sparkApplicationSpec`. See [scripts/INSTRUCTIONS.md](scripts/INSTRUCTIONS.md) for details.
 
-## Claude Code
+## AI coding agents (Claude Code and Codex)
 
-If you have [Claude Code](https://claude.com/claude-code) installed, you can set up and demo Quanton interactively from the terminal. The repo ships with [skills](.claude/skills/) (slash commands) that automate the full setup, demo, benchmarking, and teardown workflows.
+If you have [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex) installed, you can set up and demo Quanton interactively from the terminal. The repo ships with [skills](.claude/skills/) that automate the full setup, demo, benchmarking, and teardown workflows. The skills follow the [Agent Skills](https://agentskills.io) format, so the same files load in both agents.
 
-Start Claude Code in the repo root:
+Start your agent in the repo root:
 
 ```bash
-claude
+claude   # Claude Code: run a skill as a slash command, e.g. /run-tpcds-benchmark
+codex    # Codex: mention a skill with $, e.g. $run-tpcds-benchmark, or pick one from /skills
 ```
 
-Then use any of the skills:
+Then use any of the skills (the table uses the Claude Code `/name` form; in Codex type `$name`):
 
 
 | Skill                    | What it does                                                                                                                                                                                                                                                |
@@ -134,7 +135,7 @@ Then use any of the skills:
 
 All skills check prerequisites, handle errors, and give you live progress updates as jobs run on your local minikube cluster. You will need `onehouse-values.yaml` (from the [Onehouse console](https://cloud.onehouse.ai)) to install the Quanton Operator.
 
-The skills follow the [Agent Skills](https://agentskills.io) format, so they also load in [Codex](https://developers.openai.com/codex): the repo exposes them under `.agents/skills/` (a link to `.claude/skills/`), which Codex reads from the repo root. To use one outside this repo, copy its folder into `~/.claude/skills/` (Claude Code) or `~/.agents/skills/` (Codex).
+Claude Code reads the skills from `.claude/skills/`. Codex reads them from `.agents/skills/`, where each skill is a link to its `.claude/skills/` folder, so there is one copy to maintain. When you add a skill, add the matching link under `.agents/skills/`. To use one outside this repo, copy its folder into `~/.claude/skills/` (Claude Code) or `~/.agents/skills/` (Codex).
 
 ## Benchmarks
 

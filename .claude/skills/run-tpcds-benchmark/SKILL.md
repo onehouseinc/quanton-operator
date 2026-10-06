@@ -20,7 +20,7 @@ Be conversational. Give the user live progress updates. Make this feel like a gu
 
 ## Phase 0: Interactive Configuration
 
-Before doing anything, ask the user these questions interactively using AskUserQuestion.
+Before doing anything, ask the user these questions interactively. Use your agent's structured-question tool if it has one (for example `AskUserQuestion` in Claude Code); otherwise ask in plain text and wait for each reply.
 
 ### Q1: Minikube cluster
 
@@ -95,7 +95,7 @@ Ask: "Enable the **Spark Agent** during the Quanton run? It's an AI sidebar embe
 
 Default: No. The agent is optional — turn it on if you want to *see* what Quanton is doing while the benchmark runs.
 
-If yes, ask **two follow-ups** (use `AskUserQuestion`):
+If yes, ask **two follow-ups** (same way as above):
 
 **Q6a — keep the sidebar alive past benchmark completion?**
 
@@ -434,7 +434,7 @@ plt.savefig(f'benchmarks/results/sf_{SF}/comparison.png', dpi=150, bbox_inches='
 print(f'Chart saved to benchmarks/results/sf_{SF}/comparison.png')
 ```
 
-If matplotlib succeeds, show the PNG to the user using the Read tool on the image file. If it fails, tell the user: "PNG chart skipped (matplotlib not installed). ASCII chart above has the full results."
+If matplotlib succeeds, show the PNG to the user: open it with your agent's image viewer or file-read tool if it can display images; otherwise give the user the file path. If it fails, tell the user: "PNG chart skipped (matplotlib not installed). ASCII chart above has the full results."
 
 ### Final Summary
 
