@@ -54,7 +54,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -149,7 +149,7 @@ def parse_ts(value: Optional[str]) -> Optional[float]:
     text = value.replace("GMT", "").replace("UTC", "").replace("Z", "")
     for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(text, fmt).timestamp() * 1000
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).timestamp() * 1000
         except ValueError:
             continue
     return None
@@ -464,7 +464,8 @@ def executor_balance(stage_detail: Dict[str, Any]) -> Dict[str, Any]:
 
 def timeline(stages: List[Dict[str, Any]], app_start: Optional[float], app_end: Optional[float]) -> Dict[str, Any]:
     """Union of stage intervals, and the gaps where no stage was running."""
-    ivs = sorted((s["start_ms"], s["end_ms"], s) for s in stages if s.get("start_ms") and s.get("end_ms"))
+    ivs = sorted(((s["start_ms"], s["end_ms"], s) for s in stages if s.get("start_ms") and s.get("end_ms")),
+                 key=lambda t: (t[0], t[1]))
     merged: List[List[Any]] = []
     for a, b, s in ivs:
         if merged and a <= merged[-1][1]:
@@ -947,7 +948,7 @@ pre { background: var(--code); border: 1px solid var(--line); border-radius: 4px
 """
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-MAX_JOBS = 10                 # jobs shown in the timeline and the jobs table (plus any job with a critical stage)
+MAX_QUERIES = 10              # SQL executions whose jobs the timeline and the jobs table show, longest first
 NO_SIGNAL = "<span class='ok'>no signal</span>"
 CRITICAL_SHARE = 0.8          # stages shown: the longest ones until they cover this share of stage time
 MAX_CRITICAL_STAGES = 6
@@ -987,14 +988,12 @@ def critical_stages(facts: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def shown_jobs(facts: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Every job when there are few; otherwise the longest ones and those holding a critical-path stage."""
-    jobs = facts["jobs"]
-    if len(jobs) <= MAX_JOBS + 3:
-        return jobs
-    crit = {s["stage_id"] for s in critical_stages(facts)}
-    keep = {j["job_id"] for j in sorted(jobs, key=lambda j: -(j["duration_ms"] or 0))[:MAX_JOBS]}
-    keep |= {j["job_id"] for j in jobs if set(j["stages_run"]) & crit}
-    return [j for j in jobs if j["job_id"] in keep]
+    """The jobs of the longest SQL executions; every job when the application ran few of them."""
+    queries = [x for x in facts["sql"] if not x.get("wrapper")]
+    if len(queries) <= MAX_QUERIES:
+        return facts["jobs"]
+    top = {x["id"] for x in sorted(queries, key=lambda x: -(x["duration_ms"] or 0))[:MAX_QUERIES]}
+    return [j for j in facts["jobs"] if j["sql_id"] in top]
 
 
 def render_timeline(facts: Dict[str, Any]) -> str:
@@ -1073,8 +1072,8 @@ def render_html(facts: Dict[str, Any], analysis: str) -> str:
     jobs = shown_jobs(facts)
     hidden = [j for j in facts["jobs"] if j not in jobs]
     if hidden:
-        out.append(f"<p class='sub'>{len(facts['jobs'])} jobs in this application; the timeline and the table show the {len(jobs)} that "
-                   f"hold the critical-path stages or ran longest. The other {len(hidden)} ran {fmt_ms(sum(j['duration_ms'] or 0 for j in hidden))} "
+        out.append(f"<p class='sub'>{len(facts['jobs'])} jobs in this application; the timeline and the table show the {len(jobs)} jobs of "
+                   f"the {MAX_QUERIES} longest SQL executions. The other {len(hidden)} ran {fmt_ms(sum(j['duration_ms'] or 0 for j in hidden))} "
                    f"together and are in <a href='{e(ui)}/jobs/'>the Jobs tab</a>.</p>")
     out.append("<div class='scroll'><table><tr><th>Job</th><th>Description</th><th>SQL</th><th>At</th><th>Duration</th>"
                "<th>Stages run (active time, tasks)</th><th>Skipped</th></tr>")
