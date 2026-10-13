@@ -34,6 +34,12 @@ onehouseConfig:
   # Enable AI agent plugin for Spark applications
   enableAIAgent: true
 
+  # Run each job on its own sparkApplicationSpec.image instead of the engine image the operator
+  # selects above. Use this when you build a separate image per job FROM the Quanton Spark image.
+  # Default false: the operator sets the image for every job and ignores the job's image.
+  # The operator reads this at startup: after changing only this value, restart the controller.
+  useJobImage: false
+
 # Quanton Operator configuration
 quantonOperator:
   # Namespaces where Spark jobs will run

@@ -20,5 +20,6 @@ data:
       "mtlsCertPath": "/etc/mtls/client-cert.pem",
       "mtlsKeyPath": "/etc/mtls/client-key.pem",
       "helmChartVersion": {{ .Chart.Version | quote }},
-      "enableAIAgent": {{ .Values.onehouseConfig.enableAIAgent }}
+      "enableAIAgent": {{ .Values.onehouseConfig.enableAIAgent }},
+      "useJobImage": {{ eq (lower (toString (.Values.onehouseConfig.useJobImage | default false))) "true" }}
     }
