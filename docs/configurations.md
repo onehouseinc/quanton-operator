@@ -26,6 +26,7 @@ These values are typically pre-populated in the `onehouse-values.yaml` provided 
 | `onehouseConfig.quantonSpark4Image` | Quanton Spark runtime image, Spark 4 line | `""` |
 | `onehouseConfig.quantonOperatorOpenSourceCometSpark4Image` | OSS Comet image, Spark 4 line | `""` |
 | `onehouseConfig.enableAIAgent` | Enable AI agent plugin for Spark applications | `true` |
+| `onehouseConfig.useJobImage` | Run each job on its own `sparkApplicationSpec.image` instead of the image the operator selects. See [Using your own image per job](#using-your-own-image-per-job). | `false` |
 
 See [Engine and Spark Version Selection](#engine-and-spark-version-selection) for how a job picks one of these images.
 
@@ -117,7 +118,7 @@ quantonOperator:
 
 ## Engine and Spark Version Selection
 
-Each job runs on an operator-controlled image. Any `image` you set in the job spec is overridden. The operator picks the image from two fields in the job:
+By default each job runs on an operator-controlled image, and any `image` you set in the job spec is overridden. To run each job on its own image instead, see [Using your own image per job](#using-your-own-image-per-job). The operator picks the image from two fields in the job:
 
 - `spec.sparkApplicationSpec.sparkVersion` — its major version selects the line. Quanton ships `3.5.x` on the Spark 3 line and `4.1.x` on the Spark 4 line.
 - `spark.quanton.accelerator` in `sparkConf` — `native` (the default), `gluten`, or `comet`.
@@ -163,6 +164,38 @@ sparkVersion is required in spec.sparkApplicationSpec: set it to 3.5.x for Spark
 unsupported sparkVersion "5.0.0": supported versions are 3.5.x (Spark 3) and 4.1.x (Spark 4)
 spark.quanton.accelerator=gluten is not supported on Spark 4.1 (supported on Spark 4.1: native, comet)
 ```
+
+## Using your own image per job
+
+By default the operator sets the image for every job, as described in [Engine and Spark Version Selection](#engine-and-spark-version-selection), and ignores `sparkApplicationSpec.image`. Set `onehouseConfig.useJobImage` to `true` to run each job on its own image instead. Use this when you build a separate image per job on top of the Quanton Spark image.
+
+When enabled:
+
+- Each job runs on its `sparkApplicationSpec.image`. If `driver.image` or `executor.image` is set, that pod uses it.
+- `spark.quanton.accelerator` no longer selects the image. `sparkVersion` is still required and must be `3.x` or `4.x`.
+- A job with an empty `image` fails at submission.
+- Build every job image `FROM` the Quanton Spark image. A job on any other image fails at startup.
+- Set `sparkVersion` to the Spark line of the image you build from: `3.5.x` for `quantonSparkImage`, `4.1.x` for `quantonSpark4Image`. The operator still uses it to set Spark configurations, and a mismatch can fail the driver at startup.
+- The operator still sets `imagePullSecrets` to the Onehouse registry secret. Nodes must be able to pull job images without a pull secret, for example ECR with node IAM, or images in the Onehouse registry.
+
+```bash
+helm upgrade --install quanton-operator \
+  oci://registry-1.docker.io/onehouseai/quanton-operator \
+  --version <chart-version> \
+  --namespace quanton-operator \
+  --set "onehouseConfig.useJobImage=true" \
+  -f onehouse-values.yaml
+```
+
+**Restart the controller after changing only this value.** The operator reads its configuration once at startup. If `useJobImage` is the only change in a `helm upgrade`, restart the controller so it takes effect:
+
+```bash
+kubectl rollout restart deploy/quanton-controller -n quanton-operator
+```
+
+An upgrade that also changes the controller image restarts it automatically.
+
+**Keep the flag on every upgrade.** If you re-run `helm upgrade` with a fresh `onehouse-values.yaml`, for example when credentials expire, pass `--set onehouseConfig.useJobImage=true` again. Otherwise the operator goes back to setting the image itself.
 
 ## PySpark
 
